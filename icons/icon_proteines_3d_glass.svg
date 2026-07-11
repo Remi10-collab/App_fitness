@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Protéines">
+  <defs>
+    <radialGradient id="nodeMain" cx="35%" cy="28%" r="72%">
+      <stop offset="0" stop-color="#dffbff"/>
+      <stop offset=".28" stop-color="#67e8f9"/>
+      <stop offset=".55" stop-color="#0284c7"/>
+      <stop offset="1" stop-color="#102a7a"/>
+    </radialGradient>
+
+    <radialGradient id="nodeSmall" cx="35%" cy="28%" r="70%">
+      <stop offset="0" stop-color="#ecfeff"/>
+      <stop offset=".32" stop-color="#22d3ee"/>
+      <stop offset=".72" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#172554"/>
+    </radialGradient>
+
+    <linearGradient id="bond" x1="16" y1="100" x2="116" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e40af"/>
+      <stop offset=".48" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+
+    <filter id="moleculeGlow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="2.8" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0.55 0 0.05
+                0 0.85 0.75 0 0.55
+                0.25 0.35 1 0 1
+                0 0 0 .68 0" result="cyanGlow"/>
+      <feMerge>
+        <feMergeNode in="cyanGlow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="5" stdDeviation="3.2" flood-color="#020617" flood-opacity=".45"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <g stroke="url(#bond)" stroke-width="10" stroke-linecap="round" opacity=".92">
+      <path d="M63 61 27 39"/>
+      <path d="M63 61 95 31"/>
+      <path d="M63 61 33 94"/>
+      <path d="M63 61 101 91"/>
+      <path d="M63 61 62 24"/>
+      <path d="M63 61 63 106"/>
+    </g>
+
+    <g stroke="#dffbff" stroke-width="2" stroke-linecap="round" opacity=".32">
+      <path d="M63 61 27 39"/>
+      <path d="M63 61 95 31"/>
+      <path d="M63 61 33 94"/>
+      <path d="M63 61 101 91"/>
+    </g>
+
+    <g filter="url(#moleculeGlow)">
+      <circle cx="63" cy="61" r="22" fill="url(#nodeMain)" stroke="#7dd3fc" stroke-width="2"/>
+      <circle cx="27" cy="39" r="13" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.6"/>
+      <circle cx="95" cy="31" r="14" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.6"/>
+      <circle cx="33" cy="94" r="13" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.6"/>
+      <circle cx="101" cy="91" r="13" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.6"/>
+      <circle cx="62" cy="24" r="10" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.5"/>
+      <circle cx="63" cy="106" r="10" fill="url(#nodeSmall)" stroke="#93c5fd" stroke-width="1.5"/>
+    </g>
+
+    <g fill="#ffffff" opacity=".45">
+      <ellipse cx="55" cy="51" rx="7" ry="4" transform="rotate(-24 55 51)"/>
+      <ellipse cx="90" cy="25" rx="4" ry="2.5" transform="rotate(-24 90 25)"/>
+      <ellipse cx="23" cy="34" rx="3.8" ry="2.4" transform="rotate(-24 23 34)"/>
+      <ellipse cx="96" cy="86" rx="3.8" ry="2.4" transform="rotate(-24 96 86)"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,246 @@
+/* Patch vue du jour - cartes style galaxie */
+
+/* conteneur des cartes du jour */
+.day-view-grid,
+.today-stats,
+.session-stats,
+.daily-stats{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:14px;
+  margin-top:14px;
+}
+
+@media(max-width:640px){
+  .day-view-grid,
+  .today-stats,
+  .session-stats,
+  .daily-stats{
+    grid-template-columns:1fr;
+  }
+}
+
+/* carte KPI galaxie */
+.day-card,
+.today-card,
+.metric-card,
+.session-card,
+.daily-card{
+  position:relative;
+  overflow:hidden;
+  border-radius:26px;
+  padding:18px 18px 16px;
+  color:#f8fbff;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(139,92,246,.22) 0, rgba(139,92,246,0) 26%),
+    radial-gradient(circle at 82% 78%, rgba(34,211,238,.18) 0, rgba(34,211,238,0) 28%),
+    linear-gradient(180deg, rgba(20,27,70,.88) 0%, rgba(8,13,40,.94) 100%);
+  border:1px solid rgba(157,125,255,.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.10),
+    inset 0 0 36px rgba(111,76,255,.10),
+    0 0 0 1px rgba(255,255,255,.03),
+    0 16px 34px rgba(5,10,35,.45),
+    0 0 22px rgba(120,78,255,.14);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+
+.day-card::before,
+.today-card::before,
+.metric-card::before,
+.session-card::before,
+.daily-card::before{
+  content:"";
+  position:absolute;
+  inset:1px;
+  border-radius:25px;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255,255,255,.15) 0 1px, transparent 2px),
+    radial-gradient(circle at 84% 22%, rgba(255,255,255,.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 76% 68%, rgba(168,85,247,.35) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 28% 78%, rgba(59,130,246,.22) 0 1.2px, transparent 2.2px);
+  opacity:.7;
+}
+
+.day-card::after,
+.today-card::after,
+.metric-card::after,
+.session-card::after,
+.daily-card::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:26px;
+  pointer-events:none;
+  background:linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,0) 26%, rgba(34,211,238,.06) 74%, rgba(255,255,255,.05));
+  mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+}
+
+.day-card .card-top,
+.today-card .card-top,
+.metric-card .card-top,
+.session-card .card-top,
+.daily-card .card-top{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:22px;
+}
+
+.day-card .icon,
+.today-card .icon,
+.metric-card .icon,
+.session-card .icon,
+.daily-card .icon{
+  width:42px;
+  height:42px;
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22px;
+  color:#f8fbff;
+  background:linear-gradient(180deg, rgba(123,74,255,.5), rgba(65,33,150,.82));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    0 0 0 1px rgba(155,120,255,.35),
+    0 8px 20px rgba(87,54,205,.28);
+}
+
+.day-card .title,
+.today-card .title,
+.metric-card .title,
+.session-card .title,
+.daily-card .title{
+  font-size:18px;
+  font-weight:700;
+  line-height:1.1;
+}
+
+.day-card .main-value,
+.today-card .main-value,
+.metric-card .main-value,
+.session-card .main-value,
+.daily-card .main-value{
+  font-size:34px;
+  font-weight:800;
+  letter-spacing:.01em;
+  margin:0 0 4px;
+}
+
+.day-card .unit,
+.today-card .unit,
+.metric-card .unit,
+.session-card .unit,
+.daily-card .unit{
+  font-size:.62em;
+  font-weight:500;
+  color:rgba(248,251,255,.88);
+}
+
+.day-card .sub-value,
+.today-card .sub-value,
+.metric-card .sub-value,
+.session-card .sub-value,
+.daily-card .sub-value{
+  color:#22f5b0;
+  font-size:16px;
+  font-weight:700;
+  margin-top:14px;
+}
+
+.day-card .sub-label,
+.today-card .sub-label,
+.metric-card .sub-label,
+.session-card .sub-label,
+.daily-card .sub-label{
+  margin-top:6px;
+  color:rgba(232,238,255,.86);
+  font-size:14px;
+}
+
+.day-card .mini-line,
+.today-card .mini-line,
+.metric-card .mini-line,
+.session-card .mini-line,
+.daily-card .mini-line{
+  margin-top:22px;
+  height:34px;
+  position:relative;
+}
+
+.day-card .mini-line::before,
+.today-card .mini-line::before,
+.metric-card .mini-line::before,
+.session-card .mini-line::before,
+.daily-card .mini-line::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:6px;
+  height:16px;
+  border-bottom:3px solid rgba(215,122,255,.95);
+  border-radius:40px;
+  clip-path:polygon(0% 85%, 9% 62%, 18% 75%, 28% 30%, 38% 68%, 48% 52%, 58% 78%, 68% 36%, 78% 58%, 88% 26%, 100% 52%, 100% 100%, 0 100%);
+  filter:drop-shadow(0 0 8px rgba(214,109,255,.8));
+}
+
+.day-card .bar,
+.today-card .bar,
+.metric-card .bar,
+.session-card .bar,
+.daily-card .bar{
+  margin-top:18px;
+  height:16px;
+  background:rgba(11,22,60,.78);
+  border-radius:999px;
+  overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.day-card .bar > span,
+.today-card .bar > span,
+.metric-card .bar > span,
+.session-card .bar > span,
+.daily-card .bar > span{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, #18f0a6 0%, #41f1df 55%, #7fd7ff 100%);
+  box-shadow:0 0 14px rgba(65,241,223,.45);
+}
+
+.day-card .percent,
+.today-card .percent,
+.metric-card .percent,
+.session-card .percent,
+.daily-card .percent{
+  margin-top:10px;
+  text-align:right;
+  color:#2ef3c8;
+  font-size:15px;
+  font-weight:800;
+}
+
+/* Style direct pour les lignes de la séance du jour si tu gardes .row */
+.card .row{
+  position:relative;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 85% 50%, rgba(34,211,238,.10), transparent 30%),
+    linear-gradient(180deg, rgba(20,27,70,.58) 0%, rgba(12,17,46,.82) 100%);
+  border:1px solid rgba(122,143,255,.28);
+  border-radius:18px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* si tu veux masquer le nombre de séries via CSS */
+.series-count,
+.series-badge,
+.nb-series,
+.set-count{
+  display:none !important;
+}
