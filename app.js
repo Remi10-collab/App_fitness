@@ -2596,7 +2596,38 @@ function enableDatePickerFullClick(){
   });
 }
 
+function enhanceIOSDateInputs(){
+  const isCompact = window.matchMedia && window.matchMedia("(max-width: 520px)").matches;
+  const isWebKitTouch = window.CSS && CSS.supports && CSS.supports("-webkit-touch-callout", "none");
+  if(!isCompact || !isWebKitTouch) return;
+
+  document.querySelectorAll('input[type="date"]').forEach(input => {
+    if(input.closest(".ios-date-shell")) return;
+
+    const shell = document.createElement("div");
+    shell.className = "ios-date-shell";
+
+    const display = document.createElement("span");
+    display.className = "ios-date-display";
+
+    const updateDisplay = () => {
+      display.textContent = input.value ? fmt(input.value) : "Choisir une date";
+      display.classList.toggle("is-empty", !input.value);
+    };
+
+    input.parentNode.insertBefore(shell, input);
+    shell.appendChild(display);
+    shell.appendChild(input);
+
+    input.classList.add("ios-date-native");
+    input.addEventListener("input", updateDisplay);
+    input.addEventListener("change", updateDisplay);
+    updateDisplay();
+  });
+}
+
 function afterRender(){
+  enhanceIOSDateInputs();
   enableDatePickerFullClick();
   if(current==="training"){ showLastExercise(); showTodayTraining(); }
   if(current==="meals"){ showTodayMeals(); }

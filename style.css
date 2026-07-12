@@ -13816,3 +13816,111 @@ body{
     max-width:100% !important;
   }
 }
+
+/* =========================================================
+   ETAPE 118 - Contournement Safari iPhone : date affichée par un calque
+   ========================================================= */
+@supports (-webkit-touch-callout:none){
+  @media(max-width:520px){
+    .ios-date-shell{
+      position:relative !important;
+      display:block !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+      height:46px !important;
+      min-height:46px !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+      border:1px solid #cbd5e1 !important;
+      border-radius:14px !important;
+      background:#ffffff !important;
+    }
+
+    body[data-theme="light"] .ios-date-shell{
+      border-color:#cbd7e2 !important;
+      background:#ffffff !important;
+    }
+
+    body[data-theme="galaxy"] .ios-date-shell{
+      border-color:rgba(125,211,252,.24) !important;
+      background:rgba(4,10,27,.78) !important;
+    }
+
+    .ios-date-display{
+      position:absolute !important;
+      inset:0 !important;
+      z-index:1 !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      min-width:0 !important;
+      padding:0 12px !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+      white-space:nowrap !important;
+      text-overflow:ellipsis !important;
+      color:#172233 !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      pointer-events:none !important;
+    }
+
+    .ios-date-display.is-empty{
+      color:#94a3b8 !important;
+    }
+
+    body[data-theme="galaxy"] .ios-date-display{
+      color:#eef6ff !important;
+    }
+
+    body[data-theme="galaxy"] .ios-date-display.is-empty{
+      color:#8ea2bf !important;
+    }
+
+    .ios-date-shell input[type="date"].ios-date-native{
+      position:absolute !important;
+      inset:0 !important;
+      z-index:2 !important;
+      display:block !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+      height:100% !important;
+      min-height:0 !important;
+      margin:0 !important;
+      padding:0 !important;
+      border:0 !important;
+      border-radius:inherit !important;
+      background:transparent !important;
+      opacity:0 !important;
+      color:transparent !important;
+      -webkit-appearance:none !important;
+      appearance:none !important;
+      box-sizing:border-box !important;
+      cursor:pointer !important;
+    }
+
+    .ios-date-shell input[type="date"].ios-date-native::-webkit-calendar-picker-indicator{
+      position:absolute !important;
+      inset:0 !important;
+      width:100% !important;
+      height:100% !important;
+      opacity:0 !important;
+      cursor:pointer !important;
+    }
+
+    .train-field-date .ios-date-shell,
+    .meal-top-grid .ios-date-shell,
+    .card > .ios-date-shell,
+    .data-date-bar .ios-date-shell{
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+    }
+
+    .data-date-bar .ios-date-shell{
+      flex:1 1 auto !important;
+    }
+  }
+}
