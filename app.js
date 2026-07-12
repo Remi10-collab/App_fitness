@@ -70,11 +70,20 @@ const defaultFoods = [
 ];
 
 let state = load();
-state.theme = "galaxy"; // forced galaxy only
+state.theme = ["galaxy", "light"].includes(state.theme || state.settings?.theme) ? (state.theme || state.settings.theme) : "galaxy";
+state.settings = Object.assign(defaultSettings(), state.settings || {}, {theme: state.theme});
 let current = "home";
+let dataView = "dashboard";
+let dataTrainingDate = today();
+let dataMealsDate = today();
+let dataWeightRange = "30";
 let unlocked = !localStorage.getItem(PIN_KEY);
 let profileFormOpen = false;
 let mealDetailsOpen = false;
+let mealBulkMode = false;
+let selectedMealIds = new Set();
+let mealFormDate = today();
+let mealFormRepas = "PETIT DEJ";
 let customFoodFormOpen = false;
 let trainingDetailsOpen = false;
 let homeLastTrainingOpen = false;
@@ -92,53 +101,34 @@ let weightD3RenderFrame = null;
 
 const appThemes = [
   {
-    id:"aqua",
-    name:"Aqua Glow",
-    desc:"Fond goutte d'eau, verre clair, cyan doux.",
-    swatches:["#eaf9ff","#22d3ee","#8b5cf6"]
-  },
-  {
-    id:"pearl",
-    name:"Pearl White",
-    desc:"Blanc premium, très propre, sans image.",
-    swatches:["#ffffff","#dbeafe","#0f172a"]
-  },
-  {
-    id:"dark",
-    name:"Dark Tech",
-    desc:"Noir bleuté, cyan/violet, mode cockpit.",
-    swatches:["#07111f","#00d4ff","#7c3aed"]
-  },
-  {
-    id:"sunset",
-    name:"Sunset Energy",
-    desc:"Clair, chaud, énergie kcal, orange/rose.",
-    swatches:["#fff7ed","#fb923c","#e11d48"]
-  },
-  {
-    id:"mint",
-    name:"Mint Focus",
-    desc:"Vert d'eau, frais, récupération et équilibre.",
-    swatches:["#ecfdf5","#2dd4bf","#16a34a"]
-  },
-  {
     id:"galaxy",
-    name:"Galaxie",
-    desc:"Espace premium, cyan, violet et glow cosmique.",
-    swatches:["#050816","#22d3ee","#a855f7"]
+    name:"Sombre galaxie",
+    desc:"Fond étoilé bleu nuit, cartes sombres et accents cyan/violet."
+  },
+  {
+    id:"light",
+    name:"Clair moderne",
+    desc:"Fond neutre, cartes nettes et accents bleu ardoise."
   }
 ];
 
 function currentTheme(){
-  return "galaxy";
+  const selected = state.settings?.theme || state.theme || "galaxy";
+  return ["galaxy", "light"].includes(selected) ? selected : "galaxy";
 }
 
 function applyTheme(){
-  document.body.dataset.theme = "galaxy";
+  const theme = currentTheme();
+  document.documentElement.dataset.theme = theme;
+  document.body.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", theme === "light" ? "#eef3f9" : "#050816");
 }
 
-function setTheme(){
-  state.theme = "galaxy";
+function setTheme(theme){
+  const next = ["galaxy", "light"].includes(theme) ? theme : "galaxy";
+  state.theme = next;
+  state.settings = Object.assign(defaultSettings(), state.settings || {}, {theme: next});
   save();
   applyTheme();
   render();
@@ -149,13 +139,11 @@ function themePickerHtml(){
   return `<div class="card theme-card theme-card-compact">
     <div class="theme-compact-row">
       <div>
-        <h2>Thème</h2>
-        <p class="small">Ambiance visuelle de l'application.</p>
+        <h2>Apparence</h2>
+        <p class="small">Choisis le thème de toute l'application, graphique compris.</p>
       </div>
       <select id="themeSelect" class="theme-select" onchange="setTheme(this.value)">
-        ${appThemes.map(t => `
-          <option value="${t.id}" ${active===t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
-        `).join("")}
+        ${appThemes.map(t => `<option value="${t.id}" ${active===t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}
       </select>
     </div>
   </div>`;
@@ -182,7 +170,15 @@ function weekNumber(d){
 }
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function defaultProfile(){
-  return {pseudo:"", age:"", taille:"", activite:"1.20", sexe:"homme", objectifPoids:""};
+  return {
+    pseudo:"",
+    age:"",
+    taille:"",
+    activite:"1.20",
+    sexe:"homme",
+    objectifPoids:"",
+    objectifNutrition:"maintien"
+  };
 }
 
 function defaultSettings(){
@@ -190,13 +186,17 @@ function defaultSettings(){
 }
 
 function normalizeState(data){
-  const base = {trainings:[], meals:[], weights:[], muscles:defaultMuscle, exercises:defaultExercises, foods:defaultFoods, profile:defaultProfile(), settings:defaultSettings()};
+  const base = {trainings:[], meals:[], favoriteMeals:[], weights:[], muscles:defaultMuscle, exercises:defaultExercises, foods:defaultFoods, profile:defaultProfile(), settings:defaultSettings()};
   const merged = Object.assign({}, base, data || {});
   merged.profile = Object.assign(defaultProfile(), merged.profile || {});
+  if(!["seche", "maintien", "masse"].includes(merged.profile.objectifNutrition)){
+    merged.profile.objectifNutrition = "maintien";
+  }
   merged.settings = Object.assign(defaultSettings(), merged.settings || {});
   if(!Array.isArray(merged.trainings)) merged.trainings = [];
   if(!Array.isArray(merged.meals)) merged.meals = [];
   if(!Array.isArray(merged.weights)) merged.weights = [];
+  if(!Array.isArray(merged.favoriteMeals)) merged.favoriteMeals = [];
   if(!Array.isArray(merged.muscles)) merged.muscles = defaultMuscle.slice();
   if(!Array.isArray(merged.exercises)) merged.exercises = defaultExercises.slice();
   if(!Array.isArray(merged.foods)) merged.foods = defaultFoods.slice();
@@ -259,7 +259,7 @@ function navIconSvg(id){
     weight: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 4.2h9.6c1.5 0 2.8 1.1 3 2.6l1.1 9.7A3.2 3.2 0 0 1 17.7 20H6.3a3.2 3.2 0 0 1-3.2-3.5l1.1-9.7c.2-1.5 1.5-2.6 3-2.6Z"/><path d="M8.1 8.6a4.8 4.8 0 0 1 7.8 0"/><path d="M12 8.7v3.2"/></svg>`,
     meals: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 4v7.2c0 1.5 1 2.7 2.4 3V21"/><path d="M3.6 4v5.2"/><path d="M6.8 4v5.2"/><path d="M10 4v5.2"/><path d="M17.2 4c1.7 2 2.5 4.2 2.3 6.4-.2 2.3-1.2 3.8-2.8 4.5V21"/><path d="M16.8 4v10.8"/></svg>`,
     training: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4"/><path d="M6 8v8"/><path d="M9 11h6"/><path d="M18 8v8"/><path d="M21 10v4"/></svg>`,
-    history: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 9 12l3.2 3.2L20 6.8"/><path d="M15 6.8h5V12"/></svg>`,
+    data: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/><path d="M3 19h18"/></svg>`,
     profile: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.2a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Z"/><path d="M4.8 21c.9-4.1 3.5-6.2 7.2-6.2s6.3 2.1 7.2 6.2"/></svg>`,
     settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>`
   };
@@ -273,9 +273,8 @@ function navHtml(){
     ["weight","Poids"],
     ["meals","Repas"],
     ["training","Train"],
-    ["history","Suivi"],
-    ["profile","Profil"],
-    ["settings","Menu"]
+    ["data","Data"],
+    ["profile","Profil"]
   ];
 
   return `<div class="nav nav-neon"><div class="nav-inner">${items.map(([id,label])=>
@@ -284,16 +283,15 @@ function navHtml(){
       <span class="nav-label">${label}</span>
     </button>`).join("")}</div></div>`;
 }
-function go(id){ current=id; render(); }
+function go(id){ current=id; render(); requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:"auto"})); }
 
 function screenHtml(){
   if(current==="home") return homeHtml();
   if(current==="training") return trainingHtml();
   if(current==="meals") return mealsHtml();
   if(current==="weight") return weightHtml();
-  if(current==="history") return historyHtml();
+  if(current==="data") return dataHtml();
   if(current==="profile") return profileHtml();
-  if(current==="settings") return settingsHtml();
 }
 
 function lastWeight(){
@@ -328,13 +326,38 @@ function tdeeValue(){
   return bmr ? Math.round(bmr * activity) : null;
 }
 
+function nutritionObjectiveMode(){
+  const mode = (state.profile || defaultProfile()).objectifNutrition || "maintien";
+  return ["seche", "maintien", "masse"].includes(mode) ? mode : "maintien";
+}
+
+function nutritionObjectiveLabel(mode = nutritionObjectiveMode()){
+  const labels = {
+    seche:"Sèche",
+    maintien:"Maintien",
+    masse:"Prise de masse"
+  };
+  return labels[mode] || labels.maintien;
+}
+
+function nutritionObjectiveMultiplier(mode = nutritionObjectiveMode()){
+  if(mode === "seche") return 0.85;
+  if(mode === "masse") return 1.10;
+  return 1;
+}
+
+function dailyCalorieTargetValue(){
+  const tdee = tdeeValue();
+  return tdee ? Math.round(tdee * nutritionObjectiveMultiplier()) : null;
+}
+
 
 
 function dayIconSvg(type){
   const icons = {
-    poids: `<img class="day-stat-svg-icon" src="icons/icon_poids_3d_glass.svg" alt="">`,
-    kcal: `<img class="day-stat-svg-icon" src="icons/icon_kcal_3d_glass.svg" alt="">`,
-    proteines: `<img class="day-stat-svg-icon" src="icons/icon_proteines_3d_glass.svg" alt="">`
+    poids: `<svg class="day-stat-line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.8 4.5h10.4c1.5 0 2.7 1.1 2.9 2.6l.9 9.4a3.2 3.2 0 0 1-3.2 3.5H6.2A3.2 3.2 0 0 1 3 16.5l.9-9.4a2.9 2.9 0 0 1 2.9-2.6Z"/><path d="M8.2 9a4.8 4.8 0 0 1 7.6 0"/><path d="M12 9v3"/></svg>`,
+    kcal: `<svg class="day-stat-line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.3 3.2c.8 3.4-2.1 4.8-.5 7.5 1.4-1.1 2.1-2.8 1.8-4.5 4 3.2 5.4 8.3 2.5 12-2.5 3.2-7.6 3.5-10.3.5-3.4-3.8-1.1-8.3 2.2-11.1 1.8-1.5 3.1-2.9 4.3-4.4Z"/><path d="M9.7 16.7c0 1.5 1 2.5 2.4 2.5 1.6 0 2.6-1.2 2.6-2.7 0-1.3-.7-2.4-1.8-3.3-.1 1.1-.7 1.8-1.5 2.3-.2-.8-.1-1.6.2-2.5-1.2 1-1.9 2.2-1.9 3.7Z"/></svg>`,
+    proteines: `<svg class="day-stat-line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.2c2.8-1.7 6.2-1.4 8.3.8 2.8 2.8 2.3 7.8-1 11.1-3.1 3.1-7.9 3.8-10.7 1-2.4-2.4-2.2-6.2-.1-9"/><path d="M8.2 5.2c-.1 2.4 1.3 4 3.7 4.2 2.3.2 4.1-.9 4.6-3.4"/><path d="M8.3 15.6c1.7-2 3.5-3.5 5.8-4.7"/></svg>`
   };
   return icons[type] || "";
 }
@@ -607,27 +630,107 @@ function renderGalaxyProgressCard(type, title, value, unit, goalText, progress){
   </div>`;
 }
 
-function renderGalaxyDayStats(w, kcal, prot, tdee){
-  const proteinGoal = w ? Math.round(Number(w.poids) * 2) : null;
-  return `<div class="galaxy-day-grid">
-    ${renderGalaxyWeightCard()}
-    ${renderGalaxyCaloriesCard(kcal, tdee)}
-    ${renderGalaxyProgressCard(
-      "protein",
-      "Protéines",
-      Math.round(prot).toLocaleString("fr-FR"),
-      "g",
-      proteinGoal ? "Objectif : " + proteinGoal + " g" : "Objectif : -",
-      proteinGoal ? progressPercent(prot, proteinGoal) : 0
-    )}
-  </div>`;
+function renderDaySummaryIcon(type){
+  const classicType = type === "protein" ? "proteines" : (type === "calories" ? "kcal" : "poids");
+  const glassFile = type === "protein"
+    ? "icons/icon_proteines_3d_glass.svg"
+    : (type === "calories" ? "icons/icon_kcal_3d_glass.svg" : "icons/icon_poids_3d_glass.svg");
+  const label = type === "protein" ? "Protéines" : (type === "calories" ? "Calories" : "Poids");
+
+  return `<span class="today-summary-icon today-summary-icon-line">${dayIconSvg(classicType)}</span>
+    <span class="today-summary-icon today-summary-icon-glass"><img src="${glassFile}" alt="${label}"></span>`;
 }
 
-function renderClassicDayStats(w, kcal, prot, tdee){
-  return `<div class="day-stats">
-    ${dayStat("Poids", w ? w.poids+" kg" : "-", dayIconSvg("poids"))}
-    ${dayStat("Calories", Math.round(kcal)+" kcal", dayIconSvg("kcal"), tdee ? "Objectif : " + tdee + " kcal" : "Objectif : -", tdee ? progressPercent(kcal, tdee) : 0)}
-    ${dayStat("Protéines", Math.round(prot)+" g", dayIconSvg("proteines"), w ? "Objectif : " + Math.round(Number(w.poids) * 2) + " g" : "Objectif : -", w ? progressPercent(prot, Number(w.poids) * 2) : 0)}
+function renderDayStats(w, kcal, prot, calorieGoal){
+  const rows = state.weights.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const latest = rows[rows.length - 1] || null;
+  const currentWeight = latest ? Number(latest.poids) : null;
+  const previousWeight = rows.length > 1 ? Number(rows[rows.length - 2].poids) : null;
+  const deltaDay = currentWeight !== null && Number.isFinite(previousWeight)
+    ? +(currentWeight - previousWeight).toFixed(1)
+    : null;
+  const delta7 = getDeltaFromDays(rows, 7);
+  const delta30 = getDeltaFromDays(rows, 30);
+
+  const calorieTotal = Math.round(Number(kcal) || 0);
+  const calorieTarget = Number(calorieGoal) || 0;
+  const calorieObjectiveLabel = nutritionObjectiveLabel();
+  const calorieRemaining = calorieTarget ? Math.max(0, Math.round(calorieTarget - calorieTotal)) : null;
+  const caloriePercent = calorieTarget ? progressPercent(calorieTotal, calorieTarget) : 0;
+
+  const proteinTotal = Math.round(Number(prot) || 0);
+  const profileWeight = w ? Number(w.poids) : currentWeight;
+  const proteinTarget = Number.isFinite(profileWeight) ? Math.round(profileWeight * 2) : 0;
+  const proteinRemaining = proteinTarget ? Math.max(0, Math.round(proteinTarget - proteinTotal)) : null;
+  const proteinPercent = proteinTarget ? progressPercent(proteinTotal, proteinTarget) : 0;
+
+  return `<div class="today-summary-grid">
+    <article class="today-summary-card today-summary-card-weight" data-summary-card="weight">
+      <span class="today-summary-background" aria-hidden="true"></span>
+      <div class="today-summary-head">
+        ${renderDaySummaryIcon("weight")}
+        <span class="today-summary-title">Poids</span>
+      </div>
+
+      <div class="today-summary-value">
+        <strong>${currentWeight !== null ? compactKgNumber(currentWeight) : "-"}</strong>
+        <span>kg</span>
+      </div>
+
+      <div class="today-summary-weight-chart">${weightSparklineSvg(rows)}</div>
+
+      <div class="today-summary-deltas">
+        <div><span>À jour</span><strong>${signedCompactKg(deltaDay)}</strong></div>
+        <div><span>À 7 j</span><strong>${signedCompactKg(delta7)}</strong></div>
+        <div><span>À 30 j</span><strong>${signedCompactKg(delta30)}</strong></div>
+      </div>
+    </article>
+
+    <article class="today-summary-card today-summary-card-calories" data-summary-card="calories">
+      <span class="today-summary-background" aria-hidden="true"></span>
+      <div class="today-summary-head">
+        ${renderDaySummaryIcon("calories")}
+        <span class="today-summary-title">Calories</span>
+      </div>
+
+      <div class="today-summary-value">
+        <strong>${calorieTotal.toLocaleString("fr-FR")}</strong>
+        <span>kcal</span>
+      </div>
+
+      <div class="today-summary-info today-summary-info-split">
+        <span>${calorieTarget ? `Objectif ${calorieObjectiveLabel} : ${calorieTarget.toLocaleString("fr-FR")} kcal` : "Objectif : -"}</span>
+        ${calorieRemaining !== null ? `<strong>Reste ${calorieRemaining.toLocaleString("fr-FR")} kcal</strong>` : ""}
+      </div>
+
+      <div class="today-summary-progress">
+        <div class="today-summary-track"><span style="width:${caloriePercent}%"></span></div>
+        <strong>${Math.round(caloriePercent)}%</strong>
+      </div>
+    </article>
+
+    <article class="today-summary-card today-summary-card-protein" data-summary-card="protein">
+      <span class="today-summary-background" aria-hidden="true"></span>
+      <div class="today-summary-head">
+        ${renderDaySummaryIcon("protein")}
+        <span class="today-summary-title">Protéines</span>
+      </div>
+
+      <div class="today-summary-value">
+        <strong>${proteinTotal.toLocaleString("fr-FR")}</strong>
+        <span>g</span>
+      </div>
+
+      <div class="today-summary-info today-summary-info-split">
+        <span>Objectif : ${proteinTarget ? proteinTarget.toLocaleString("fr-FR") + " g" : "-"}</span>
+        ${proteinRemaining !== null ? `<strong>Reste ${proteinRemaining.toLocaleString("fr-FR")} g</strong>` : ""}
+      </div>
+
+      <div class="today-summary-progress">
+        <div class="today-summary-track"><span style="width:${proteinPercent}%"></span></div>
+        <strong>${Math.round(proteinPercent)}%</strong>
+      </div>
+    </article>
   </div>`;
 }
 
@@ -650,6 +753,25 @@ function dayStat(label, value, icon, goalText="", progress=null){
   `;
 }
 
+
+
+function sessionVisualImage(seanceName){
+  const name = normalizeText(seanceName || "");
+
+  if(name.includes("dos") || name.includes("back")){
+    return { key:"dos", src:"assets/session_light_dos.webp", alt:"Statue grecque dos" };
+  }
+
+  if(name.includes("jambe") || name.includes("quad") || name.includes("ischio") || name.includes("mollet") || name.includes("leg")){
+    return { key:"jambes", src:"assets/session_light_jambes.webp", alt:"Statue grecque jambes" };
+  }
+
+  if(name.includes("pec") || name.includes("epaule") || name.includes("épaul") || name.includes("shoulder") || name.includes("triceps") || name.includes("chest")){
+    return { key:"pecs-epaules", src:"assets/session_light_pecs_epaules.webp", alt:"Statue grecque pecs et épaules" };
+  }
+
+  return { key:"default", src:"assets/session_light_pecs_epaules.webp", alt:"Statue grecque musculation" };
+}
 
 function toggleHomeLastTrainingDetails(){
   homeLastTrainingOpen = !homeLastTrainingOpen;
@@ -687,19 +809,21 @@ function renderHomeLastTrainingCard(){
       </div>`
     : "";
 
+  const visual = sessionVisualImage(mainMuscle);
+
   return `<div class="card home-last-training-card home-last-premium">
     <h2>Dernière séance effectuée</h2>
 
     <div class="home-session-panel">
-      <div class="home-session-visual"></div>
+      <div class="home-session-visual ${currentTheme() === "light" ? `home-session-visual-photo session-photo-${visual.key}` : ""}" aria-label="${escapeHtml(visual.alt)}"></div>
 
       <div class="home-session-content">
-        <div class="home-session-date">📅 ${fmt(lastDate)}</div>
+        <div class="home-session-date">${fmt(lastDate)}</div>
         <strong class="home-session-title">${escapeHtml(mainMuscle)}</strong>
 
         <div class="home-session-metrics">
-          <span>🏋️ ${exercisesCount} exercice${exercisesCount > 1 ? "s" : ""}</span>
-          <span>▮ ${Math.round(volume).toLocaleString("fr-FR")} kg volume</span>
+          <span>${exercisesCount} exercice${exercisesCount > 1 ? "s" : ""}</span>
+          <span>${Math.round(volume).toLocaleString("fr-FR")} kg volume</span>
           <span>${rows.length} série${rows.length > 1 ? "s" : ""}</span>
         </div>
       </div>
@@ -727,7 +851,7 @@ function homeProfileEditIconSvg(){
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20.2 4.6 16.9 14.9 6.6a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L8.1 20.4 4 20.2Z"/><path d="m13.8 7.7 2.5 2.5"/><path d="M4 20h5.1"/></svg>`;
 }
 
-function renderHomeProfileBanner(w, kcal, prot, tdee){
+function renderHomeProfileBanner(w, kcal, prot, calorieGoal){
   const profile = state.profile || defaultProfile();
   const name = (profile.pseudo || "").trim() || "sportif";
   const sexeLabel = profile.sexe === "femme" ? "Femme" : "Homme";
@@ -736,8 +860,8 @@ function renderHomeProfileBanner(w, kcal, prot, tdee){
   const poids = w ? `${escapeHtml(w.poids)} kg` : "poids à compléter";
 
   let status = "Ajoute tes données du jour pour suivre ta progression.";
-  if(tdee){
-    const remainingKcal = Math.max(0, Math.round(tdee - (Number(kcal) || 0)));
+  if(calorieGoal){
+    const remainingKcal = Math.max(0, Math.round(calorieGoal - (Number(kcal) || 0)));
     const proteinTarget = Math.round((Number(w?.poids) || 0) * 2) || 0;
     const remainingProt = proteinTarget ? Math.max(0, Math.round(proteinTarget - (Number(prot) || 0))) : null;
     status = remainingProt !== null
@@ -746,7 +870,6 @@ function renderHomeProfileBanner(w, kcal, prot, tdee){
   }
 
   return `<div class="card home-profile-banner">
-    <div class="home-profile-avatar">👤</div>
     <div class="home-profile-main">
       <h2>Bonjour, ${escapeHtml(name)}</h2>
       <div class="home-profile-meta">${sexeLabel} · ${age} · ${taille} · ${poids}</div>
@@ -760,9 +883,9 @@ function homeHtml(){
   const todayMeals = state.meals.filter(m=>m.date===today());
   const w = lastWeight();
   const kcal = sum(todayMeals,"kcal"), prot=sum(todayMeals,"prot");
-  const tdee = tdeeValue();
+  const calorieGoal = dailyCalorieTargetValue();
 
-  return `${renderHomeProfileBanner(w, kcal, prot, tdee)}
+  return `${renderHomeProfileBanner(w, kcal, prot, calorieGoal)}
 
   <div class="home-section-title-row">
     <h2>Vue du jour</h2>
@@ -770,7 +893,7 @@ function homeHtml(){
   </div>
 
   <div class="card vue-jour-card home-vue-premium">
-    ${renderGalaxyDayStats(w, kcal, prot, tdee)}
+    ${renderDayStats(w, kcal, prot, calorieGoal)}
   </div>
 
   <div class="card home-quick-card home-section-card">
@@ -809,6 +932,9 @@ function saveProfile(){
   state.profile.age = String(age);
   state.profile.taille = String(taille);
   state.profile.sexe = val("profileSexe") || "homme";
+  state.profile.objectifNutrition = ["seche", "maintien", "masse"].includes(val("profileObjectif"))
+    ? val("profileObjectif")
+    : "maintien";
   state.profile.activite = val("profileActivite") || "1.20";
   profileFormOpen = false;
   save();
@@ -828,14 +954,14 @@ function row(left, right, type=null, id=null){
 
       ${type && id ? `
         <div class="row-actions">
-          <button class="icon-btn edit"
+          <button class="icon-btn edit" aria-label="Modifier" title="Modifier"
             onclick="editItem('${type}','${id}')">
-            ✏️
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.1-.8L19 8.3a2.1 2.1 0 0 0 0-3l-.3-.3a2.1 2.1 0 0 0-3 0L4.8 15.9 4 20Z"/><path d="m14.6 6.1 3.3 3.3"/></svg>
           </button>
 
-          <button class="icon-btn delete"
+          <button class="icon-btn delete" aria-label="Supprimer" title="Supprimer"
             onclick="deleteItem('${type}','${id}')">
-            🗑️
+            ×
           </button>
         </div>
       ` : ""}
@@ -846,9 +972,17 @@ function row(left, right, type=null, id=null){
 
 function trainingHtml(){
   return `<div class="card"><h2>Ajouter une série</h2>
-    <label>Date</label><input id="trDate" type="date" value="${today()}" max="${today()}">
-    <label>Séance</label><select id="trSeance"><option value="">-- Choisir une séance --</option>${state.muscles.map(m =>`<option>${m}</option>`).join("")}</select>
-    <label>Type</label><select id="trType"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+    <div class="train-top-row">
+      <div class="train-field train-field-date">
+        <label>Date</label><input id="trDate" type="date" value="${today()}" max="${today()}">
+      </div>
+      <div class="train-field train-field-session">
+        <label>Séance</label><select id="trSeance"><option value="">-- Choisir --</option>${state.muscles.map(m =>`<option>${m}</option>`).join("")}</select>
+      </div>
+      <div class="train-field train-field-type">
+        <label>Type</label><select id="trType"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+      </div>
+    </div>
     <label>Exercice</label>
 
 	<div class="autocomplete">
@@ -941,24 +1075,86 @@ function showTodayTraining(){
   box.innerHTML = summary + toggle + details;
 }
 
-function mealsHtml(){
-  return `<div class="card"><h2>Ajouter un aliment</h2>
-    <label>Date</label><input id="mealDate" type="date" value="${today()}" max="${today()}">
-    <label>Repas</label><select id="mealRepas"><option>PETIT DEJ</option><option>MIDI</option><option>COLLATION</option><option>SOIR</option></select>
-    <label>Aliment</label>
+function mealRepasOptions(selected){
+  return ["PETIT DEJ", "MIDI", "COLLATION", "SOIR"]
+    .map(name => `<option ${name === selected ? "selected" : ""}>${name}</option>`)
+    .join("");
+}
 
-	<div class="autocomplete">
-	  <input
-		id="mealFood"
-		placeholder="Tape au moins 2 lettres..."
-		oninput="filterFoods()"
-		autocomplete="off"
-	  >
-	  <div id="foodSuggestions" class="suggestions"></div>
-	</div>
-    <label>Quantité en g</label><input id="mealQte" inputmode="decimal" placeholder="ex: 240">
+function mealsHtml(){
+  const favorites = (state.favoriteMeals || [])
+    .slice()
+    .sort((a,b) => String(a.name || "").localeCompare(String(b.name || ""), "fr"));
+
+  const favoriteCards = favorites.map(favorite => {
+    const items = Array.isArray(favorite.items) ? favorite.items : [];
+    const preview = items
+      .slice(0, 3)
+      .map(item => `${escapeHtml(item.aliment)} ${Number(item.qte) || 0} g`)
+      .join(" · ");
+    const more = items.length > 3 ? ` · +${items.length - 3}` : "";
+
+    return `<article class="favorite-library-card">
+      <div class="favorite-library-main">
+        <div class="favorite-library-title">
+          <strong>${escapeHtml(favorite.name)}</strong>
+          <span>${escapeHtml(favorite.repas || "AUTRE")}</span>
+        </div>
+        <p>${preview || "Aucun aliment"}${more}</p>
+      </div>
+      <div class="favorite-library-actions">
+        <button type="button" onclick='applyFavoriteMeal(${JSON.stringify(favorite.id)})'>Utiliser</button>
+        <button type="button" class="secondary" onclick='openFavoriteMealEditor(${JSON.stringify(favorite.id)})'>Modifier</button>
+        <button type="button" class="secondary favorite-delete-btn" onclick='deleteFavoriteMeal(${JSON.stringify(favorite.id)})'>Supprimer</button>
+      </div>
+    </article>`;
+  }).join("");
+
+  return `<div class="card"><h2>Ajouter un aliment</h2>
+    <div class="meal-top-grid">
+      <div>
+        <label>Date</label>
+        <input id="mealDate" type="date" value="${mealFormDate}" max="${today()}" onchange="setMealFormDate(this.value)">
+      </div>
+      <div>
+        <label>Repas</label>
+        <select id="mealRepas" onchange="setMealFormRepas(this.value)">${mealRepasOptions(mealFormRepas)}</select>
+      </div>
+    </div>
+
+    <label>Aliment</label>
+    <div class="autocomplete">
+      <input
+        id="mealFood"
+        placeholder="Tape au moins 2 lettres..."
+        oninput="filterFoods()"
+        autocomplete="off"
+      >
+      <div id="foodSuggestions" class="suggestions"></div>
+    </div>
+
+    <label>Quantité en g</label>
+    <input id="mealQte" inputmode="decimal" placeholder="ex: 240">
+
     <button onclick="addMeal()">Ajouter l'aliment</button>
   </div>
+
+  <div class="card favorite-meals-card">
+    <div class="favorite-library-head">
+      <div>
+        <h2>Repas favoris</h2>
+        <p class="small">Crée ici tes repas modèles, indépendamment des aliments du jour. Un même favori ne peut être ajouté qu'une fois par date.</p>
+      </div>
+      <button class="secondary favorite-create-btn" type="button" onclick="openNewFavoriteMealEditor()">+ Créer un repas</button>
+    </div>
+
+    <div id="favoriteMealEditor"></div>
+
+    ${favorites.length
+      ? `<div class="favorite-library-list">${favoriteCards}</div>`
+      : `<div class="favorite-empty-state"><strong>Aucun repas favori</strong><span>Crée un modèle avec son nom, son type et ses aliments.</span></div>`}
+  </div>
+
   <div class="card"><h2>Totaux du jour</h2><div id="todayMeals"></div></div>
   <div class="card collapsible-card">
     <h2 class="collapsible-title" onclick="toggleCustomFoodForm()">
@@ -976,12 +1172,25 @@ function mealsHtml(){
   </div>`;
 }
 
+function setMealFormDate(value){
+  mealFormDate = value || today();
+  mealBulkMode = false;
+  selectedMealIds.clear();
+  showTodayMeals();
+}
+
+function setMealFormRepas(value){
+  mealFormRepas = value || "PETIT DEJ";
+}
+
 function toggleCustomFoodForm(){
   customFoodFormOpen = !customFoodFormOpen;
   render();
 }
 
 function addMeal(){
+  mealFormDate = val("mealDate") || mealFormDate || today();
+  mealFormRepas = val("mealRepas") || mealFormRepas || "PETIT DEJ";
   const food = state.foods.find(f=>f.name===val("mealFood"));
   const q = Number(val("mealQte").replace(",","."));
   if(!food || !q) return alert("Choisis un aliment et une quantité.");
@@ -997,6 +1206,317 @@ function addMeal(){
   document.getElementById("mealQte").value="";
   showTodayMeals();
 }
+
+function favoriteSignature(items){
+  return (items || [])
+    .map(item => `${normalizeText(item.aliment)}:${Number(item.qte) || 0}`)
+    .sort()
+    .join("|");
+}
+
+function favoriteEditorItemHtml(item={aliment:"", qte:""}){
+  return `<div class="favorite-editor-item">
+    <div class="favorite-editor-field favorite-food-field">
+      <label>Aliment</label>
+      <div class="autocomplete favorite-food-autocomplete">
+        <input
+          class="favorite-edit-food"
+          value="${escapeHtml(item.aliment || "")}"
+          placeholder="Tape au moins 2 lettres..."
+          autocomplete="off"
+          oninput="filterFavoriteFoods(this)"
+          onfocus="filterFavoriteFoods(this)"
+        >
+        <div class="suggestions favorite-food-suggestions"></div>
+      </div>
+    </div>
+
+    <div class="favorite-editor-field favorite-qte-field">
+      <label>Quantité en g</label>
+      <input
+        class="favorite-edit-qte"
+        inputmode="decimal"
+        value="${escapeHtml(item.qte || "")}"
+        placeholder="ex : 150"
+      >
+    </div>
+
+    <button type="button" class="icon-btn delete favorite-editor-remove" onclick="removeFavoriteEditorItem(this)" title="Retirer cet aliment">×</button>
+  </div>`;
+}
+
+function favoriteMealEditorHtml(favorite=null){
+  const isNew = !favorite;
+  const model = favorite || {
+    id:"",
+    name:"",
+    repas:mealFormRepas || "PETIT DEJ",
+    items:[{aliment:"", qte:""}]
+  };
+
+  const items = Array.isArray(model.items) && model.items.length
+    ? model.items
+    : [{aliment:"", qte:""}];
+
+  return `<div class="favorite-editor-card" data-mode="${isNew ? "new" : "edit"}" data-favorite-id="${escapeHtml(model.id || "")}">
+    <div class="favorite-editor-head">
+      <div><span class="data-kicker">${isNew ? "Nouveau modèle" : "Modification"}</span><h3>${isNew ? "Créer un repas favori" : "Éditer le favori"}</h3></div>
+      <button type="button" class="secondary favorite-editor-close" onclick="closeFavoriteMealEditor()">Fermer</button>
+    </div>
+
+    <div class="favorite-editor-meta">
+      <div><label>Nom du repas</label><input id="favoriteEditName" value="${escapeHtml(model.name || "")}" placeholder="ex : Poulet riz"></div>
+      <div><label>Type de repas</label><select id="favoriteEditRepas">${mealRepasOptions(model.repas || "PETIT DEJ")}</select></div>
+    </div>
+
+    <div class="favorite-editor-section-head">
+      <strong>Aliments du modèle</strong>
+      <span>Choisis les aliments et leurs quantités.</span>
+    </div>
+
+    <div id="favoriteEditorItems" class="favorite-editor-items">
+      ${items.map(item => favoriteEditorItemHtml(item)).join("")}
+    </div>
+
+    <div class="favorite-editor-footer">
+      <button type="button" class="secondary" onclick="addFavoriteEditorItem()">+ Ajouter un aliment</button>
+      <button type="button" onclick="saveFavoriteMealEdits()">${isNew ? "Créer le favori" : "Enregistrer les modifications"}</button>
+    </div>
+  </div>`;
+}
+
+function openNewFavoriteMealEditor(){
+  const box = document.getElementById("favoriteMealEditor");
+  if(!box) return;
+  box.innerHTML = favoriteMealEditorHtml();
+  box.scrollIntoView({behavior:"smooth", block:"nearest"});
+  setTimeout(() => document.getElementById("favoriteEditName")?.focus(), 150);
+}
+
+function openFavoriteMealEditor(favoriteId=""){
+  const favorite = (state.favoriteMeals || []).find(f => f.id === favoriteId);
+  const box = document.getElementById("favoriteMealEditor");
+  if(!favorite || !box) return alert("Favori introuvable.");
+  box.innerHTML = favoriteMealEditorHtml(favorite);
+  box.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+function closeFavoriteMealEditor(){
+  const box = document.getElementById("favoriteMealEditor");
+  if(box) box.innerHTML = "";
+}
+
+function addFavoriteEditorItem(){
+  const box = document.getElementById("favoriteEditorItems");
+  if(box) box.insertAdjacentHTML("beforeend", favoriteEditorItemHtml());
+}
+
+function filterFavoriteFoods(input){
+  const autocomplete = input?.closest(".favorite-food-autocomplete");
+  const box = autocomplete?.querySelector(".favorite-food-suggestions");
+  if(!input || !box) return;
+
+  document.querySelectorAll(".favorite-food-suggestions").forEach(other => {
+    if(other !== box){
+      other.innerHTML = "";
+      other.style.display = "none";
+    }
+  });
+
+  const query = input.value.toLowerCase().trim();
+  if(query.length < 2){
+    box.innerHTML = "";
+    box.style.display = "none";
+    return;
+  }
+
+  const results = (state.foods || [])
+    .filter(food => normalizeText(food.name).includes(normalizeText(query)))
+    .slice(0, 30);
+
+  if(!results.length){
+    box.innerHTML = `<div class="suggestion-empty">Aucun aliment trouvé</div>`;
+    box.style.display = "block";
+    return;
+  }
+
+  box.innerHTML = results.map(food => `
+    <div
+      class="suggestion-item"
+      data-food="${escapeHtml(food.name)}"
+      onclick="selectFavoriteFoodSuggestion(this)"
+    >${escapeHtml(food.name)}</div>
+  `).join("");
+  box.style.display = "block";
+}
+
+function selectFavoriteFoodSuggestion(item){
+  const autocomplete = item?.closest(".favorite-food-autocomplete");
+  const input = autocomplete?.querySelector(".favorite-edit-food");
+  const box = autocomplete?.querySelector(".favorite-food-suggestions");
+  const row = item?.closest(".favorite-editor-item");
+
+  if(input) input.value = item.dataset.food || item.textContent.trim();
+  if(box){
+    box.innerHTML = "";
+    box.style.display = "none";
+  }
+
+  row?.querySelector(".favorite-edit-qte")?.focus();
+}
+
+function removeFavoriteEditorItem(button){
+  const rows = document.querySelectorAll(".favorite-editor-item");
+  if(rows.length <= 1){
+    const row = button?.closest(".favorite-editor-item");
+    if(row){
+      const food = row.querySelector(".favorite-edit-food");
+      const qte = row.querySelector(".favorite-edit-qte");
+      if(food) food.value = "";
+      if(qte) qte.value = "";
+    }
+    return;
+  }
+  button?.closest(".favorite-editor-item")?.remove();
+}
+
+function readFavoriteEditorItems(){
+  const rows = Array.from(document.querySelectorAll(".favorite-editor-item"));
+  const items = [];
+  const invalid = [];
+
+  rows.forEach(row => {
+    const foodName = row.querySelector(".favorite-edit-food")?.value.trim() || "";
+    const qte = Number((row.querySelector(".favorite-edit-qte")?.value || "").replace(",", "."));
+    if(!foodName && !qte) return;
+
+    const food = state.foods.find(f => normalizeText(f.name) === normalizeText(foodName));
+    if(!food || !qte || qte <= 0){
+      invalid.push(foodName || "ligne incomplète");
+      return;
+    }
+
+    items.push({aliment:food.name, qte});
+  });
+
+  return {items, invalid};
+}
+
+function saveFavoriteMealEdits(){
+  const editor = document.querySelector(".favorite-editor-card");
+  if(!editor) return;
+
+  const isNew = editor.dataset.mode === "new";
+  const favoriteId = editor.dataset.favoriteId || "";
+  const name = val("favoriteEditName").trim();
+  const repas = val("favoriteEditRepas") || "PETIT DEJ";
+
+  if(!name) return alert("Le nom du favori est obligatoire.");
+
+  const {items, invalid} = readFavoriteEditorItems();
+  if(invalid.length) return alert("Corrige les lignes invalides : " + invalid.join(", "));
+  if(!items.length) return alert("Le favori doit contenir au moins un aliment.");
+
+  const duplicateName = (state.favoriteMeals || []).find(f =>
+    f.id !== favoriteId && normalizeText(f.name) === normalizeText(name)
+  );
+  if(duplicateName) return alert("Un autre favori porte déjà ce nom.");
+
+  const signature = favoriteSignature(items);
+  const duplicateContent = (state.favoriteMeals || []).find(f =>
+    f.id !== favoriteId && favoriteSignature(f.items) === signature
+  );
+  if(duplicateContent){
+    return alert(`Un favori identique existe déjà : ${duplicateContent.name}`);
+  }
+
+  if(isNew){
+    state.favoriteMeals.unshift({
+      id:uid(),
+      name,
+      repas,
+      items,
+      createdAt:new Date().toISOString()
+    });
+  }else{
+    const favorite = (state.favoriteMeals || []).find(f => f.id === favoriteId);
+    if(!favorite) return alert("Favori introuvable.");
+    favorite.name = name;
+    favorite.repas = repas;
+    favorite.items = items;
+    favorite.updatedAt = new Date().toISOString();
+  }
+
+  save();
+  render();
+}
+
+function applyFavoriteMeal(favoriteId){
+  const favorite = (state.favoriteMeals || []).find(f => f.id === favoriteId);
+  if(!favorite) return alert("Favori introuvable.");
+
+  mealFormDate = val("mealDate") || mealFormDate || today();
+  mealFormRepas = favorite.repas || "AUTRE";
+  if(!checkNotFutureDate(mealFormDate)) return;
+
+  const alreadyAdded = (state.meals || []).some(m =>
+    m.date === mealFormDate && m.favoriteId === favorite.id
+  );
+  if(alreadyAdded){
+    return alert(`Le favori « ${favorite.name} » est déjà ajouté à cette date.`);
+  }
+
+  const missing = [];
+  const added = [];
+
+  (favorite.items || []).forEach(entry => {
+    const food = state.foods.find(f => normalizeText(f.name) === normalizeText(entry.aliment));
+    const q = Number(entry.qte) || 0;
+    if(!food || !q){
+      missing.push(entry.aliment);
+      return;
+    }
+
+    const factor = q / 100;
+    added.push({
+      id:uid(),
+      date:mealFormDate,
+      repas:mealFormRepas,
+      aliment:food.name,
+      qte:q,
+      kcal:+(food.kcal*factor).toFixed(1),
+      prot:+(food.prot*factor).toFixed(1),
+      gluc:+(food.gluc*factor).toFixed(1),
+      lip:+(food.lip*factor).toFixed(1),
+      semaine:weekNumber(mealFormDate),
+      mois:monthName(mealFormDate),
+      favoriteId:favorite.id,
+      favoriteName:favorite.name
+    });
+  });
+
+  if(!added.length){
+    return alert("Impossible d'ajouter ce favori : aucun aliment valide n'a été trouvé.");
+  }
+
+  state.meals.unshift(...added);
+  save();
+  render();
+
+  if(missing.length){
+    alert("Favori ajouté, mais certains aliments sont introuvables : " + missing.join(", "));
+  }
+}
+
+function deleteFavoriteMeal(favoriteId){
+  const favorite = (state.favoriteMeals || []).find(f => f.id === favoriteId);
+  if(!favorite) return alert("Favori introuvable.");
+  if(!confirm(`Supprimer le favori "${favorite.name}" ?`)) return;
+  state.favoriteMeals = state.favoriteMeals.filter(f => f.id !== favoriteId);
+  save();
+  render();
+}
+
 function addFood(){
   const f = {name:val("foodName").trim(), kcal:num("foodKcal"), prot:num("foodProt"), gluc:num("foodGluc"), lip:num("foodLip")};
   if(!f.name) return alert("Nom obligatoire.");
@@ -1053,16 +1573,104 @@ function renderMealDetailsGrouped(rows){
       return `
         <div class="meal-group">
           <div class="meal-group-head">
-            <strong>${escapeHtml(repas)}</strong>
+            <div class="meal-group-title">
+              ${mealBulkMode ? `
+                <input
+                  class="meal-group-checkbox"
+                  type="checkbox"
+                  aria-label="Sélectionner tout le repas ${escapeHtml(repas)}"
+                  ${items.every(item => selectedMealIds.has(item.id)) ? "checked" : ""}
+                  onchange='toggleMealGroupSelection(${JSON.stringify(items.map(item => item.id))})'
+                >
+              ` : ""}
+              <strong>${escapeHtml(repas)}</strong>
+            </div>
             <span>${Math.round(total.kcal)} kcal · ${Math.round(total.prot)} g prot</span>
           </div>
           <div class="meal-group-items">
-            ${items.map(m=>row(`${m.aliment}`, `${m.qte}g · ${m.kcal} kcal`,"meals",m.id)).join("")}
+            ${items.map(m => renderMealDataRow(m)).join("")}
           </div>
         </div>
       `;
     })
     .join("");
+}
+
+function renderMealDataRow(meal){
+  const selected = selectedMealIds.has(meal.id);
+  const selectableAttrs = mealBulkMode
+    ? `role="checkbox" tabindex="0" aria-checked="${selected}" onclick="toggleMealSelection('${meal.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMealSelection('${meal.id}');}"`
+    : "";
+
+  return `
+    <div class="row meal-data-row ${mealBulkMode ? "bulk-mode" : ""} ${selected ? "is-selected" : ""}" ${selectableAttrs}>
+      <div class="meal-data-main">
+        <div>${escapeHtml(meal.aliment)}</div>
+        <strong>${escapeHtml(meal.qte)}g · ${escapeHtml(meal.kcal)} kcal</strong>
+      </div>
+
+      ${mealBulkMode ? `
+        <input
+          class="meal-row-checkbox"
+          type="checkbox"
+          aria-label="Sélectionner ${escapeHtml(meal.aliment)}"
+          ${selected ? "checked" : ""}
+          onclick="event.stopPropagation()"
+          onchange="toggleMealSelection('${meal.id}')"
+        >
+      ` : `
+        <div class="row-actions">
+          <button class="icon-btn edit" aria-label="Modifier" title="Modifier"
+            onclick="editItem('meals','${meal.id}')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.1-.8L19 8.3a2.1 2.1 0 0 0 0-3l-.3-.3a2.1 2.1 0 0 0-3 0L4.8 15.9 4 20Z"/><path d="m14.6 6.1 3.3 3.3"/></svg>
+          </button>
+          <button class="icon-btn delete" aria-label="Supprimer" title="Supprimer"
+            onclick="deleteItem('meals','${meal.id}')">×</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function toggleMealBulkMode(enabled){
+  mealBulkMode = Boolean(enabled);
+  selectedMealIds.clear();
+  if(mealBulkMode) mealDetailsOpen = true;
+  showTodayMeals();
+}
+
+function toggleMealSelection(id){
+  if(!mealBulkMode) return;
+  if(selectedMealIds.has(id)) selectedMealIds.delete(id);
+  else selectedMealIds.add(id);
+  showTodayMeals();
+}
+
+function toggleAllVisibleMeals(ids){
+  if(!mealBulkMode) return;
+  const validIds = Array.isArray(ids) ? ids : [];
+  const allSelected = validIds.length > 0 && validIds.every(id => selectedMealIds.has(id));
+  validIds.forEach(id => allSelected ? selectedMealIds.delete(id) : selectedMealIds.add(id));
+  showTodayMeals();
+}
+
+function toggleMealGroupSelection(ids){
+  toggleAllVisibleMeals(ids);
+}
+
+function deleteSelectedMeals(){
+  const ids = Array.from(selectedMealIds);
+  if(!ids.length) return;
+
+  const label = ids.length > 1 ? `${ids.length} aliments` : "cet aliment";
+  if(!confirm(`Supprimer ${label} ?`)) return;
+
+  const idSet = new Set(ids);
+  state.meals = state.meals.filter(meal => !idSet.has(meal.id));
+  selectedMealIds.clear();
+  mealBulkMode = false;
+  save();
+  showTodayMeals();
 }
 
 function toggleTodayTrainingDetails(){
@@ -1071,16 +1679,55 @@ function toggleTodayTrainingDetails(){
 }
 
 function showTodayMeals(){
-  const d = document.getElementById("mealDate")?.value || today();
+  const d = document.getElementById("mealDate")?.value || mealFormDate || today();
+  mealFormDate = d;
   const rows = state.meals.filter(m=>m.date===d);
+  const visibleIds = rows.map(m => m.id);
+
+  Array.from(selectedMealIds).forEach(id => {
+    if(!visibleIds.includes(id)) selectedMealIds.delete(id);
+  });
+
   const kcal=sum(rows,"kcal"), prot=sum(rows,"prot"), gluc=sum(rows,"gluc"), lip=sum(rows,"lip");
   const box = document.getElementById("todayMeals");
   if(!box) return;
 
-  const detailToggle = rows.length ? `
-    <button type="button" class="detail-toggle" onclick="toggleTodayMealDetails()">
-      ${mealDetailsOpen ? "Masquer le détail" : "Détail"}
-    </button>
+  const selectedCount = visibleIds.filter(id => selectedMealIds.has(id)).length;
+  const allSelected = rows.length > 0 && selectedCount === rows.length;
+
+  const detailToolbar = rows.length ? `
+    <div class="meal-detail-toolbar">
+      <button type="button" class="detail-toggle" onclick="toggleTodayMealDetails()">
+        ${mealDetailsOpen ? "Masquer le détail" : "Détail"}
+      </button>
+
+      <label class="meal-bulk-toggle">
+        <input type="checkbox" ${mealBulkMode ? "checked" : ""} onchange="toggleMealBulkMode(this.checked)">
+        <span>Sélection multiple</span>
+      </label>
+
+      ${mealBulkMode ? `
+        <label class="meal-select-all">
+          <input
+            type="checkbox"
+            ${allSelected ? "checked" : ""}
+            onchange='toggleAllVisibleMeals(${JSON.stringify(visibleIds)})'
+          >
+          <span>Tout</span>
+        </label>
+        <button
+          type="button"
+          class="meal-bulk-delete ${selectedCount ? "has-selection danger" : ""}"
+          aria-label="Supprimer les aliments sélectionnés"
+          title="Supprimer la sélection"
+          onclick="deleteSelectedMeals()"
+          ${selectedCount ? "" : "disabled"}
+        >
+          <span class="meal-bulk-delete-icon">×</span>
+          <span class="meal-bulk-delete-count">${selectedCount}</span>
+        </button>
+      ` : ""}
+    </div>
   ` : "";
 
   const details = mealDetailsOpen
@@ -1094,12 +1741,16 @@ function showTodayMeals(){
       ${stat("Gluc",Math.round(gluc)+" g")}
       ${stat("Lip",Math.round(lip)+" g")}
     </div>
-    ${rows.length ? detailToggle + details : `<p class="small">Aucun aliment.</p>`}
+    ${rows.length ? detailToolbar + details : `<p class="small">Aucun aliment.</p>`}
   `;
 }
 
 function toggleTodayMealDetails(){
   mealDetailsOpen = !mealDetailsOpen;
+  if(!mealDetailsOpen){
+    mealBulkMode = false;
+    selectedMealIds.clear();
+  }
   showTodayMeals();
 }
 
@@ -1425,15 +2076,158 @@ function renderHistory(){
 }
 
 
+
+function dataIconSvg(type){
+  const icons = {
+    dashboard:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></svg>`,
+    trainings:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M6 8v8M9 11h6M18 8v8M21 10v4"/></svg>`,
+    meals:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M16 3v18M16 3c3 1 4 4 4 7v2h-4"/></svg>`,
+    weights:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10a3 3 0 0 1 3 2.6l1 9.8A3.2 3.2 0 0 1 17.8 20H6.2A3.2 3.2 0 0 1 3 16.4l1-9.8A3 3 0 0 1 7 4Z"/><path d="M8 9a5 5 0 0 1 8 0M12 9v3"/></svg>`,
+    library:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 5.5v15M8 7h8M8 11h8"/></svg>`,
+    backup:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l3 3v13H5Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>`
+  };
+  return icons[type] || icons.dashboard;
+}
+
+function setDataView(view){
+  dataView = view;
+  render();
+  requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:"auto"}));
+}
+
+function changeDataDate(kind, delta){
+  const key = kind === "trainings" ? "dataTrainingDate" : "dataMealsDate";
+  const currentDate = kind === "trainings" ? dataTrainingDate : dataMealsDate;
+  const d = new Date((currentDate || today()) + "T12:00:00");
+  d.setDate(d.getDate() + delta);
+  const next = d.toISOString().slice(0,10);
+  if(next > today()) return;
+  if(kind === "trainings") dataTrainingDate = next; else dataMealsDate = next;
+  render();
+}
+
+function setDataDate(kind, value){
+  if(!value || value > today()) return;
+  if(kind === "trainings") dataTrainingDate = value; else dataMealsDate = value;
+  render();
+}
+
+function dataNavHtml(){
+  const items = [
+    ["dashboard","Tableau de bord"],
+    ["trainings","Entraînements"],
+    ["meals","Repas"],
+    ["weights","Poids"],
+    ["library","Bibliothèque"],
+    ["backup","Sauvegarde"]
+  ];
+  return `<div class="data-nav-grid">${items.map(([id,label])=>`<button type="button" class="data-nav-card ${dataView===id?"active":""}" onclick="setDataView('${id}')"><span class="data-nav-icon">${dataIconSvg(id)}</span><span>${label}</span></button>`).join("")}</div>`;
+}
+
+function dataDashboardHtml(){
+  const trainings = state.trainings || [];
+  const meals = state.meals || [];
+  const weights = (state.weights || []).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const sessionDays = new Set(trainings.map(x=>x.date)).size;
+  const series = trainings.length;
+  const exercises = new Set(trainings.map(x=>x.exercice).filter(Boolean)).size;
+  const volume = trainings.reduce((a,x)=>a+(Number(x.poids)||0)*(Number(x.repetitions)||0),0);
+  const firstWeight = weights.length ? Number(weights[0].poids) : null;
+  const lastWeightValue = weights.length ? Number(weights[weights.length-1].poids) : null;
+  const weightDelta = Number.isFinite(firstWeight) && Number.isFinite(lastWeightValue) ? +(lastWeightValue-firstWeight).toFixed(1) : null;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-29); const cutoffStr=cutoff.toISOString().slice(0,10);
+  const tr30=trainings.filter(x=>x.date>=cutoffStr);
+  const meals30=meals.filter(x=>x.date>=cutoffStr);
+  const daysWithMeals = new Set(meals30.map(x=>x.date)).size || 1;
+  const kcalAvg = Math.round(sum(meals30,"kcal")/daysWithMeals);
+  const protAvg = Math.round(sum(meals30,"prot")/daysWithMeals);
+  return `
+    <div class="card data-dashboard-card">
+      <div class="data-section-head"><div><span class="data-kicker">Depuis le début</span><h2>Ton activité</h2></div></div>
+      <div class="data-stats-grid">
+        ${stat("Séances",sessionDays)}
+        ${stat("Séries",series)}
+        ${stat("Exercices",exercises)}
+        ${stat("Volume",volume>=1000?(volume/1000).toLocaleString("fr-FR",{maximumFractionDigits:1})+" t":Math.round(volume)+" kg")}
+        ${stat("Repas",meals.length)}
+        ${stat("Évolution poids",weightDelta===null?"—":(weightDelta>0?"+":"")+weightDelta.toLocaleString("fr-FR")+" kg")}
+      </div>
+    </div>
+    <div class="card data-dashboard-card">
+      <div class="data-section-head"><div><span class="data-kicker">30 derniers jours</span><h2>Résumé récent</h2></div></div>
+      <div class="data-stats-grid compact">
+        ${stat("Séances",new Set(tr30.map(x=>x.date)).size)}
+        ${stat("Séries",tr30.length)}
+        ${stat("Kcal moy./j",kcalAvg||"—")}
+        ${stat("Prot. moy./j",protAvg?protAvg+" g":"—")}
+      </div>
+    </div>`;
+}
+
+function dataDateBar(kind, date){
+  return `<div class="data-date-bar"><button type="button" class="data-date-arrow" onclick="changeDataDate('${kind}',-1)" aria-label="Jour précédent">‹</button><input type="date" value="${date}" max="${today()}" onchange="setDataDate('${kind}',this.value)"><button type="button" class="data-date-arrow" onclick="changeDataDate('${kind}',1)" aria-label="Jour suivant" ${date>=today()?"disabled":""}>›</button></div>`;
+}
+
+function dataTrainingsHtml(){
+  const rows=(state.trainings||[]).filter(x=>x.date===dataTrainingDate).slice().reverse();
+  const groups=[]; const map=new Map();
+  rows.forEach((x,i)=>{const key=x.exercice||"Exercice"; if(!map.has(key)){const g={name:key,rows:[],first:i};map.set(key,g);groups.push(g);} map.get(key).rows.push(x);});
+  const volume=rows.reduce((a,x)=>a+(Number(x.poids)||0)*(Number(x.repetitions)||0),0);
+  return `<div class="card data-history-card"><div class="data-section-head"><div><span class="data-kicker">Historique ciblé</span><h2>Entraînements</h2></div></div>${dataDateBar("trainings",dataTrainingDate)}
+    ${rows.length?`<div class="data-day-summary"><span>${groups.length} exercice${groups.length>1?"s":""}</span><span>${rows.length} série${rows.length>1?"s":""}</span><span>${Math.round(volume).toLocaleString("fr-FR")} kg</span></div>
+    <div class="data-exercise-list">${groups.map((g,index)=>`<details class="data-exercise-block" ${index===0?"open":""}><summary><div><span class="data-exercise-index">Exercice ${index+1}</span><strong>${escapeHtml(g.name)}</strong></div><span>${g.rows.length} série${g.rows.length>1?"s":""}</span></summary><div class="data-series-list">${g.rows.map((x,i)=>`<div class="data-series-row"><span>S${escapeHtml(x.serie||i+1)}</span><strong>${escapeHtml(x.poids)} kg</strong><span>${escapeHtml(x.repetitions)} reps</span><button class="icon-btn delete" onclick="deleteItem('trainings','${x.id}')">×</button></div>`).join("")}</div></details>`).join("")}</div>`:`<p class="data-empty">Aucune séance enregistrée à cette date.</p>`}
+  </div>`;
+}
+
+function dataMealsHtml(){
+  const rows=(state.meals||[]).filter(x=>x.date===dataMealsDate).slice().reverse();
+  const order=["PETIT DEJ","MIDI","COLLATION","SOIR"];
+  const groups=order.map(name=>({name,rows:rows.filter(x=>x.repas===name)})).filter(g=>g.rows.length);
+  const kcal=sum(rows,"kcal"), prot=sum(rows,"prot"), gluc=sum(rows,"gluc"), lip=sum(rows,"lip");
+  return `<div class="card data-history-card"><div class="data-section-head"><div><span class="data-kicker">Historique ciblé</span><h2>Repas</h2></div></div>${dataDateBar("meals",dataMealsDate)}
+    ${rows.length?`<div class="data-day-summary nutrition"><span>${Math.round(kcal)} kcal</span><span>${Math.round(prot)} g prot.</span><span>${Math.round(gluc)} g gluc.</span><span>${Math.round(lip)} g lip.</span></div>
+    <div class="data-meal-list">${groups.map(g=>`<section class="data-meal-block"><h3>${escapeHtml(g.name)}</h3>${g.rows.map(x=>`<div class="data-meal-row"><div><strong>${escapeHtml(x.aliment)}</strong><small>${escapeHtml(x.qte)} g</small></div><span>${Math.round(Number(x.kcal)||0)} kcal</span><button class="icon-btn delete" onclick="deleteItem('meals','${x.id}')">×</button></div>`).join("")}</section>`).join("")}</div>`:`<p class="data-empty">Aucun repas enregistré à cette date.</p>`}
+  </div>`;
+}
+
+function setDataWeightRange(range){dataWeightRange=range;render();}
+function dataWeightsHtml(){
+  const all=(state.weights||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const days=Number(dataWeightRange); const cutoff=new Date(); if(days) cutoff.setDate(cutoff.getDate()-(days-1)); const cut=days?cutoff.toISOString().slice(0,10):"";
+  const rows=days?all.filter(x=>x.date>=cut):all;
+  return `<div class="card data-history-card"><div class="data-section-head"><div><span class="data-kicker">Mesures</span><h2>Historique poids</h2></div></div><div class="data-range-tabs">${[["7","7 j"],["30","30 j"],["90","90 j"],["365","1 an"],["all","Tout"]].map(([v,l])=>`<button class="${dataWeightRange===v?"active":""}" onclick="setDataWeightRange('${v}')">${l}</button>`).join("")}</div><div class="data-weight-list">${rows.map((w,i)=>{const next=rows[i+1];const d=next?+(Number(w.poids)-Number(next.poids)).toFixed(1):null;return `<div class="data-weight-row"><span>${fmt(w.date)}</span><strong>${escapeHtml(w.poids)} kg</strong><em>${d===null?"":(d>0?"+":"")+d.toLocaleString("fr-FR")+" kg"}</em><button class="icon-btn delete" onclick="deleteItem('weights','${w.id}')">×</button></div>`}).join("")||`<p class="data-empty">Aucune pesée sur cette période.</p>`}</div></div>`;
+}
+
+function dataLibraryHtml(){
+  return `<div class="card"><div class="data-section-head"><div><span class="data-kicker">Gestion</span><h2>Bibliothèque</h2></div></div><p class="small">Consulte et nettoie les listes utilisées dans les formulaires.</p><div class="grid2 data-switch"><button id="btnDataExercises" class="secondary" onclick="showDataTable('exercises')">Exercices</button><button id="btnDataFoods" class="secondary" onclick="showDataTable('foods')">Aliments</button></div><div id="dataTableBox" class="data-table-box"></div></div>`;
+}
+
+function dataBackupHtml(){
+  return `<div class="card"><div class="data-section-head"><div><span class="data-kicker">Sécurité</span><h2>Sauvegarde</h2></div></div><button class="green" onclick="exportData()">Exporter mes données</button><label>Importer JSON</label><input type="file" id="fileImport" accept=".json"><button onclick="importFile()">Importer le fichier</button></div><div class="card"><h2>Verrouillage</h2><input id="pinNew" type="password" inputmode="numeric" placeholder="Nouveau code, ou vide pour supprimer"><button onclick="savePin()">Enregistrer le code</button></div><div class="card danger-zone"><h2>Zone sensible</h2><button class="danger" onclick="resetData()">Tout supprimer</button></div>`;
+}
+
+function dataHtml(){
+  let content=dataDashboardHtml();
+  if(dataView==="trainings") content=dataTrainingsHtml();
+  if(dataView==="meals") content=dataMealsHtml();
+  if(dataView==="weights") content=dataWeightsHtml();
+  if(dataView==="library") content=dataLibraryHtml();
+  if(dataView==="backup") content=dataBackupHtml();
+  return `<div class="data-hero"><span class="data-kicker">Centre de données</span><h2>Data</h2><p>Résumé, historiques filtrés et bibliothèque.</p></div>${dataNavHtml()}<div class="data-content">${content}</div>`;
+}
+
 function profileHtml(){
   const profile = state.profile || defaultProfile();
   const bmr = bmrValue();
   const tdee = tdeeValue();
+  const calorieGoal = dailyCalorieTargetValue();
+  const objectiveMode = nutritionObjectiveMode();
+  const objectiveLabel = nutritionObjectiveLabel(objectiveMode);
   const sexeLabel = profile.sexe === "femme" ? "Femme" : "Homme";
   const activity = String(profile.activite || "1.20").replace(".", ",");
   const latestWeight = lastWeight();
   const profileSummary = profile.age && profile.taille
-    ? `${sexeLabel} • ${escapeHtml(profile.age)} ans • ${escapeHtml(profile.taille)} cm • activité x${activity}`
+    ? `${sexeLabel} • ${escapeHtml(profile.age)} ans • ${escapeHtml(profile.taille)} cm • ${objectiveLabel} • activité x${activity}`
     : "Profil incomplet";
 
   const profileForm = `
@@ -1447,6 +2241,12 @@ function profileHtml(){
         <option value="homme" ${profile.sexe !== "femme" ? "selected" : ""}>Homme</option>
         <option value="femme" ${profile.sexe === "femme" ? "selected" : ""}>Femme</option>
       </select>
+      <label>Objectif</label><select id="profileObjectif">
+        <option value="maintien" ${objectiveMode === "maintien" ? "selected" : ""}>Maintien</option>
+        <option value="seche" ${objectiveMode === "seche" ? "selected" : ""}>Sèche · -15 %</option>
+        <option value="masse" ${objectiveMode === "masse" ? "selected" : ""}>Prise de masse · +10 %</option>
+      </select>
+      <p class="small profile-objective-help">La cible calorique de la Vue du jour sera recalculée automatiquement.</p>
       <label>Niveau d'activité</label><select id="profileActivite">
         <option value="1.20" ${String(profile.activite)==="1.20" ? "selected" : ""}>Sédentaire · x1,20</option>
         <option value="1.375" ${String(profile.activite)==="1.375" ? "selected" : ""}>Peu actif · x1,375</option>
@@ -1461,10 +2261,12 @@ function profileHtml(){
     <h2>Profil utilisateur</h2>
     <p class="small">Tes informations servent à calculer ton métabolisme et tes objectifs calories.</p>
     <div class="profile-summary profile-summary-page">
-      <span>👤 ${profileSummary}</span>
-      <span>⚖️ Dernier poids : ${latestWeight ? escapeHtml(latestWeight.poids)+" kg" : "-"}</span>
+      <span>${profileSummary}</span>
+      <span>Dernier poids : ${latestWeight ? escapeHtml(latestWeight.poids)+" kg" : "-"}</span>
     </div>
   </div>
+
+  ${themePickerHtml()}
 
   <div class="card"><h2>Informations personnelles</h2>
     ${profileForm}
@@ -1476,11 +2278,16 @@ function profileHtml(){
       ${stat("Métabolisme basal", bmr ? bmr+" kcal" : "-")}
       ${stat("Dépense totale", tdee ? tdee+" kcal" : "-")}
     </div>
-    ${tdee ? `<div class="grid3 metabolic-targets">
-      ${stat("Perte -15%", Math.round(tdee*0.85)+" kcal")}
-      ${stat("Maintien", tdee+" kcal")}
-      ${stat("Masse +10%", Math.round(tdee*1.10)+" kcal")}
-    </div>` : `<p class="small">Ajoute ton âge, ta taille, ton activité et au moins une pesée pour afficher le calcul.</p>`}
+    ${tdee ? `
+      <div class="metabolism-selected-goal">
+        <span>Objectif sélectionné · ${objectiveLabel}</span>
+        <strong>${calorieGoal ? calorieGoal.toLocaleString("fr-FR") + " kcal / jour" : "-"}</strong>
+      </div>
+      <div class="grid3 metabolic-targets">
+        <div class="stat metabolic-target ${objectiveMode === "seche" ? "active" : ""}"><div class="label">Sèche -15%</div><div class="value">${Math.round(tdee*0.85)} kcal</div></div>
+        <div class="stat metabolic-target ${objectiveMode === "maintien" ? "active" : ""}"><div class="label">Maintien</div><div class="value">${tdee} kcal</div></div>
+        <div class="stat metabolic-target ${objectiveMode === "masse" ? "active" : ""}"><div class="label">Masse +10%</div><div class="value">${Math.round(tdee*1.10)} kcal</div></div>
+      </div>` : `<p class="small">Ajoute ton âge, ta taille, ton activité et au moins une pesée pour afficher le calcul.</p>`}
   </div>`;
 }
 
@@ -1554,7 +2361,7 @@ function showDataTable(type){
         <div class="table-row data-exercise-row">
           <div>${i + 1}</div>
           <div>${escapeHtml(e)}</div>
-          <div><button class="icon-btn delete" onclick='deleteListItem("exercises", ${JSON.stringify(e)})'>🗑️</button></div>
+          <div><button class="icon-btn delete" onclick='deleteListItem("exercises", ${JSON.stringify(e)})' aria-label="Supprimer" title="Supprimer">×</button></div>
         </div>
       `).join("") || `<p class="small">Aucun exercice.</p>`}
     `;
@@ -1576,7 +2383,7 @@ function showDataTable(type){
           <div>${escapeHtml(f.prot)}</div>
           <div>${escapeHtml(f.gluc)}</div>
           <div>${escapeHtml(f.lip)}</div>
-          <div><button class="icon-btn delete" onclick='deleteListItem("foods", ${JSON.stringify(f.name)})'>🗑️</button></div>
+          <div><button class="icon-btn delete" onclick='deleteListItem("foods", ${JSON.stringify(f.name)})' aria-label="Supprimer" title="Supprimer">×</button></div>
         </div>
       `).join("") || `<p class="small">Aucun aliment.</p>`}
     `;
@@ -1641,6 +2448,7 @@ function importFile(){
         weights: state.weights.length,
         trainings: state.trainings.length,
         meals: state.meals.length,
+        favoriteMeals: (state.favoriteMeals || []).length,
         exercises: state.exercises.length,
         foods: state.foods.length
       };
@@ -1669,6 +2477,25 @@ function importFile(){
         });
       }
 
+      if(Array.isArray(parsed.favoriteMeals)){
+        parsed.favoriteMeals.forEach(favorite => {
+          const valid = favorite && favorite.name && Array.isArray(favorite.items);
+          const exists = (state.favoriteMeals || []).some(x =>
+            (favorite.id && x.id === favorite.id) ||
+            (normalizeText(x.name) === normalizeText(favorite.name) && favoriteSignature(x.items) === favoriteSignature(favorite.items))
+          );
+          if(valid && !exists){
+            state.favoriteMeals.push({
+              id: favorite.id || uid(),
+              name: String(favorite.name).trim(),
+              repas: favorite.repas || "PETIT DEJ",
+              createdAt: favorite.createdAt || new Date().toISOString(),
+              items: favorite.items.map(item => ({aliment:String(item.aliment || "").trim(), qte:normalizeNum(item.qte)})).filter(item => item.aliment && item.qte > 0)
+            });
+          }
+        });
+      }
+
       if(Array.isArray(parsed.exercises)){
         parsed.exercises.forEach(ex => addUniqueExercise(ex));
       }
@@ -1683,11 +2510,12 @@ function importFile(){
         weights: state.weights.length - before.weights,
         trainings: state.trainings.length - before.trainings,
         meals: state.meals.length - before.meals,
+        favoriteMeals: (state.favoriteMeals || []).length - before.favoriteMeals,
         exercises: state.exercises.length - before.exercises,
         foods: state.foods.length - before.foods
       };
 
-      alert(`Import réussi. Ajoutés : ${added.trainings} entraînements, ${added.meals} repas, ${added.weights} poids, ${added.exercises} exercices, ${added.foods} aliments.`);
+      alert(`Import réussi. Ajoutés : ${added.trainings} entraînements, ${added.meals} repas, ${added.favoriteMeals} favoris, ${added.weights} poids, ${added.exercises} exercices, ${added.foods} aliments.`);
       render();
     }
     catch(e){
@@ -1741,7 +2569,9 @@ function addUniqueFood(f){
 
 function resetData(){
   if(confirm("Supprimer toutes les données ?")){
-    state={trainings:[],meals:[],weights:[],exercises:defaultExercises,foods:defaultFoods};
+    state = normalizeState({});
+    state.theme = currentTheme();
+    state.settings = Object.assign(defaultSettings(), state.settings || {}, {theme: state.theme});
     save(); render();
   }
 }
@@ -1770,7 +2600,7 @@ function afterRender(){
   enableDatePickerFullClick();
   if(current==="training"){ showLastExercise(); showTodayTraining(); }
   if(current==="meals"){ showTodayMeals(); }
-  if(current==="history"){ renderHistory(); }
+  if(current==="data" && dataView==="library"){ currentDataTable = null; setDataTableButtons(null); }
   if(current==="weight"){ drawWeightChart(); }
 }
 function loadD3(){
@@ -2068,7 +2898,7 @@ async function drawWeightChart(){
       .attr("width", innerW)
       .attr("height", innerH)
       .attr("rx", 2)
-      .attr("fill", "#fbfdff");
+      .attr("fill", "var(--chart-plot-bg)");
 
     // Grille horizontale
     const yTicks = y.ticks(weightTickCount(yMin, yMax));
@@ -2502,6 +3332,7 @@ function deleteItem(type, id){
   if(!confirm("Supprimer cette donnée ?")) return;
 
   state[type] = state[type].filter(x => x.id !== id);
+  if(type === "meals") selectedMealIds.delete(id);
 
   save();
 
