@@ -9602,3 +9602,379 @@ body[data-theme="galaxy"]::after{
     background-size:cover !important;
   }
 }
+
+/* =========================================================
+   ETAPE 86 - Passe responsive globale iPhone / mobile
+   ========================================================= */
+
+html{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+
+body{
+  width:100%;
+  max-width:100%;
+  min-height:100dvh;
+  overflow-x:hidden;
+}
+
+img,svg,canvas,video{
+  max-width:100%;
+}
+
+.app{
+  width:min(100%, 560px);
+  max-width:100%;
+  min-width:0;
+  padding-left:max(14px, env(safe-area-inset-left));
+  padding-right:max(14px, env(safe-area-inset-right));
+  padding-bottom:calc(118px + env(safe-area-inset-bottom, 0px));
+  overflow:visible;
+}
+
+.card,
+.card > *,
+.grid2,
+.grid3,
+.row,
+.autocomplete,
+.autocomplete-wrap,
+.field-autocomplete,
+.profile-form,
+.weight-premium-card,
+.home-profile-banner,
+.home-section-card{
+  min-width:0;
+  max-width:100%;
+}
+
+.grid2,
+.grid3{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+
+input,
+select,
+textarea,
+button{
+  box-sizing:border-box;
+  max-width:100%;
+  min-width:0;
+}
+
+input,
+select,
+textarea{
+  width:100%;
+  color:#f4f7ff !important;
+  caret-color:#7dd3fc;
+  -webkit-text-fill-color:#f4f7ff;
+}
+
+input::placeholder,
+textarea::placeholder{
+  color:#aebbd2 !important;
+  opacity:1 !important;
+  -webkit-text-fill-color:#aebbd2;
+}
+
+select option{
+  color:#f4f7ff;
+  background:#081123;
+}
+
+label,
+.small,
+.subtitle,
+.profile-summary,
+.profile-summary *,
+.home-profile-meta,
+.home-profile-status,
+.meal-group,
+.meal-group *,
+.row,
+.row *,
+.autocomplete-list,
+.autocomplete-list *,
+.suggestions,
+.suggestions *,
+.search-results,
+.search-results *,
+.exercise-results,
+.exercise-results *,
+.food-results,
+.food-results *{
+  text-shadow:none;
+}
+
+body[data-theme="galaxy"] label{
+  color:#cbd7ea !important;
+}
+
+body[data-theme="galaxy"] .small,
+body[data-theme="galaxy"] .subtitle,
+body[data-theme="galaxy"] .home-profile-meta,
+body[data-theme="galaxy"] .profile-summary,
+body[data-theme="galaxy"] .profile-summary *{
+  color:#c2cde1 !important;
+  opacity:1 !important;
+}
+
+body[data-theme="galaxy"] .home-profile-status{
+  color:#9deeff !important;
+  opacity:1 !important;
+}
+
+body[data-theme="galaxy"] .autocomplete-list,
+body[data-theme="galaxy"] .suggestions,
+body[data-theme="galaxy"] .search-results,
+body[data-theme="galaxy"] .food-results,
+body[data-theme="galaxy"] .exercise-results,
+body[data-theme="galaxy"] .menu-results{
+  width:100% !important;
+  max-width:100% !important;
+  left:0 !important;
+  right:0 !important;
+  overflow-x:hidden !important;
+  color:#eef4ff !important;
+  background:rgba(5,11,27,.99) !important;
+}
+
+body[data-theme="galaxy"] .autocomplete-list > *,
+body[data-theme="galaxy"] .suggestions > *,
+body[data-theme="galaxy"] .search-results > *,
+body[data-theme="galaxy"] .food-results > *,
+body[data-theme="galaxy"] .exercise-results > *,
+body[data-theme="galaxy"] .menu-results > *{
+  color:#e8efff !important;
+  opacity:1 !important;
+  -webkit-text-fill-color:#e8efff !important;
+}
+
+/* Le contrôle iOS de date reste strictement dans sa carte. */
+input[type="date"]{
+  display:block !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  height:56px !important;
+  min-height:56px !important;
+  padding:0 48px 0 16px !important;
+  margin:0 !important;
+  line-height:normal !important;
+  overflow:hidden !important;
+  border-radius:16px !important;
+  appearance:none !important;
+  -webkit-appearance:none !important;
+}
+
+input[type="date"]::-webkit-date-and-time-value{
+  min-width:0 !important;
+  padding:0 !important;
+  margin:0 !important;
+  text-align:left !important;
+}
+
+input[type="date"]::-webkit-datetime-edit{
+  min-width:0 !important;
+  padding:0 !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator{
+  position:absolute !important;
+  right:16px !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  width:22px !important;
+  height:22px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+
+/* Navigation : 7 onglets sur une seule rangée, y compris sur iPhone. */
+.nav,
+.nav-neon{
+  left:0 !important;
+  right:0 !important;
+  width:100% !important;
+  max-width:100% !important;
+  padding-left:max(6px,env(safe-area-inset-left)) !important;
+  padding-right:max(6px,env(safe-area-inset-right)) !important;
+}
+
+.nav .nav-inner,
+.nav-neon .nav-inner{
+  width:100% !important;
+  max-width:560px !important;
+  grid-template-columns:repeat(7,minmax(0,1fr)) !important;
+  grid-auto-flow:column !important;
+  grid-auto-columns:minmax(0,1fr) !important;
+  gap:0 !important;
+}
+
+.nav-neon button{
+  min-width:0 !important;
+  width:100% !important;
+  padding-left:1px !important;
+  padding-right:1px !important;
+}
+
+.nav-neon .nav-label{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Graphiques et tableaux ne doivent jamais élargir la page. */
+.weight-d3-chart,
+.weight-chart-wrap,
+.weight-echart,
+.d3-weight-svg,
+canvas,
+table{
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+}
+
+.table-wrap,
+.table-responsive{
+  max-width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+@media(max-width:760px){
+  .app{
+    width:100%;
+    padding-top:18px;
+  }
+
+  .card{
+    width:100%;
+    padding:15px !important;
+    border-radius:22px !important;
+  }
+
+  .home-profile-banner{
+    grid-template-columns:auto minmax(0,1fr) auto !important;
+  }
+
+  .home-profile-main{
+    min-width:0;
+  }
+
+  .home-profile-meta,
+  .home-profile-status{
+    overflow-wrap:anywhere;
+  }
+}
+
+@media(max-width:560px){
+  .grid2,
+  .grid3{
+    grid-template-columns:1fr !important;
+  }
+
+  input,
+  select,
+  textarea,
+  button{
+    font-size:16px;
+  }
+
+  .galaxy-day-grid,
+  .home-quick-card .quick-actions-grid,
+  .weight-summary-strip,
+  .weight-premium-stats{
+    grid-template-columns:1fr !important;
+  }
+
+  body[data-theme="galaxy"] .g-day-card{
+    min-height:0 !important;
+  }
+
+  .row{
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  .row-actions{
+    width:100%;
+    justify-content:flex-end;
+  }
+
+  .nav-neon .nav-inner{
+    min-height:64px !important;
+    padding:6px 3px calc(5px + env(safe-area-inset-bottom,0px)) !important;
+    border-radius:24px !important;
+  }
+
+  .nav-neon button{
+    height:54px !important;
+    gap:2px !important;
+  }
+
+  .nav-icon,
+  .nav-icon svg{
+    width:21px !important;
+    height:21px !important;
+  }
+
+  .nav-label{
+    font-size:8.5px !important;
+    letter-spacing:0 !important;
+  }
+}
+
+@media(max-width:390px){
+  .app{
+    padding-left:10px;
+    padding-right:10px;
+  }
+
+  h1{
+    font-size:clamp(1.8rem,9vw,2.35rem) !important;
+  }
+
+  .card{
+    padding:13px !important;
+    border-radius:20px !important;
+  }
+
+  .home-profile-banner{
+    gap:9px !important;
+  }
+
+  .home-profile-avatar{
+    width:42px !important;
+    height:42px !important;
+  }
+
+  .nav-label{
+    font-size:7.8px !important;
+  }
+}
+
+@media(orientation:landscape) and (max-height:520px){
+  .app{
+    padding-bottom:90px;
+  }
+
+  .nav-neon .nav-inner{
+    min-height:56px !important;
+  }
+
+  .nav-neon button{
+    height:48px !important;
+  }
+}
