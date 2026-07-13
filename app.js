@@ -9,14 +9,20 @@ const defaultMuscle = [
 ];
 const defaultExercises = [
   "Adducteurs",
+  "Bare au front",
+  "Chest press",
   "Curl concentré",
   "Curl double poulie 6",
   "Curl double poulie 4",
   "Curl marteau",
+  "Crunch poulie",
+  "Relevé de jambres",
   "Élévation frontale double poulie",
   "Élévation latérale haltères",
   "Élévation latérale poulie mid",
   "High cable fly",
+  "Mid cable fly",
+  "Low cable fly",
   "Leg extension",
   "Leg press",
   "Leg curl allongé",
@@ -38,7 +44,9 @@ const defaultExercises = [
   "Oiseau banc incliné",
   "Oiseau unilatéral poulie basse",
   "Oiseau unilatéral poulie haute",
-  "Reverse Fly"
+  "Reverse Fly",
+  "RDL Smith",
+  "Curl banc incliné"
 ];
 
 const defaultFoods = [
@@ -91,40 +99,12 @@ let editingTrainingId = null;
 let weightChartRange = "90";
 let weightHistoryOpen = false;
 let trainingMode = "free";
-let selectedProgramId = "test";
-let selectedProgramSessionId = "A";
+let selectedProgramId = state.programs?.[0]?.id || "";
+let selectedProgramSessionId = state.programs?.[0]?.sessions?.[0]?.id || "";
 let openProgramExerciseId = null;
 let programTrainingDate = today();
 
-const builtinPrograms = [
-  {
-    id:"test",
-    name:"Programme Test",
-    desc:"Exemple simple pour valider l'interface programme.",
-    sessions:[
-      {
-        id:"A",
-        name:"Séance A",
-        exercises:[
-          {name:"Smith incline bench press", sets:3, repMin:8, repMax:12},
-          {name:"Pec deck", sets:3, repMin:10, repMax:15},
-          {name:"Tirage vertical", sets:3, repMin:8, repMax:12},
-          {name:"Curl marteau", sets:3, repMin:10, repMax:15}
-        ]
-      },
-      {
-        id:"B",
-        name:"Séance B",
-        exercises:[
-          {name:"Leg press", sets:4, repMin:8, repMax:12},
-          {name:"Leg curl assis", sets:3, repMin:10, repMax:15},
-          {name:"Mollets Perfect Squat", sets:4, repMin:12, repMax:20},
-          {name:"Reverse Fly", sets:3, repMin:12, repMax:20}
-        ]
-      }
-    ]
-  }
-];
+
 
 let weightD3ResizeObserver = null;
 let d3Promise = null;
@@ -222,7 +202,7 @@ function defaultSettings(){
 }
 
 function normalizeState(data){
-  const base = {trainings:[], meals:[], favoriteMeals:[], weights:[], muscles:defaultMuscle, exercises:defaultExercises, foods:defaultFoods, profile:defaultProfile(), settings:defaultSettings()};
+  const base = {trainings:[], meals:[], favoriteMeals:[], weights:[], muscles:defaultMuscle, exercises:defaultExercises, foods:defaultFoods, programs:[], profile:defaultProfile(), settings:defaultSettings()};
   const merged = Object.assign({}, base, data || {});
   merged.profile = Object.assign(defaultProfile(), merged.profile || {});
   if(!["seche", "maintien", "masse"].includes(merged.profile.objectifNutrition)){
@@ -236,6 +216,7 @@ function normalizeState(data){
   if(!Array.isArray(merged.muscles)) merged.muscles = defaultMuscle.slice();
   if(!Array.isArray(merged.exercises)) merged.exercises = defaultExercises.slice();
   if(!Array.isArray(merged.foods)) merged.foods = defaultFoods.slice();
+  merged.programs = Array.isArray(merged.programs) ? merged.programs.map(normalizeProgramDefinition).filter(Boolean) : [];
   return merged;
 }
 
@@ -1081,8 +1062,13 @@ function trainingModeSwitchHtml(){
   </div>`;
 }
 
+function getPrograms(){
+  return Array.isArray(state.programs) ? state.programs : [];
+}
+
 function getSelectedProgram(){
-  return builtinPrograms.find(program => program.id === selectedProgramId) || builtinPrograms[0] || null;
+  const programs = getPrograms();
+  return programs.find(program => program.id === selectedProgramId) || programs[0] || null;
 }
 
 function getSelectedProgramSession(){
@@ -1105,16 +1091,17 @@ function setTrainingMode(mode){
 }
 
 function setTrainingProgram(id){
-  selectedProgramId = builtinPrograms.some(program => program.id === id) ? id : (builtinPrograms[0]?.id || "test");
+  const programs = getPrograms();
+  selectedProgramId = programs.some(program => program.id === id) ? id : (programs[0]?.id || "");
   const session = getSelectedProgram()?.sessions?.[0];
-  selectedProgramSessionId = session?.id || "A";
+  selectedProgramSessionId = session?.id || "";
   openProgramExerciseId = null;
   render();
 }
 
 function setTrainingProgramSession(id){
   const program = getSelectedProgram();
-  selectedProgramSessionId = program?.sessions?.some(session => session.id === id) ? id : (program?.sessions?.[0]?.id || "A");
+  selectedProgramSessionId = program?.sessions?.some(session => session.id === id) ? id : (program?.sessions?.[0]?.id || "");
   openProgramExerciseId = null;
   render();
 }
@@ -1181,7 +1168,7 @@ function programExerciseCardHtml(program, session, exercise, index, date){
   const suggestedReps = last?.repetitions ?? exercise.repMin;
 
   return `<article class="program-exercise-card ${open ? "is-open" : ""} ${progress.isComplete ? "is-complete" : ""}">
-    <button type="button" class="program-exercise-head" onclick="toggleProgramExercise('${exerciseId}')" aria-expanded="${open ? "true" : "false"}">
+    <div class="program-exercise-head" role="button" tabindex="0" onclick="toggleProgramExercise('${exerciseId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleProgramExercise('${exerciseId}');}" aria-expanded="${open ? "true" : "false"}">
       <div class="program-exercise-head-main">
         <strong>${index + 1}. ${escapeHtml(exercise.name)}</strong>
         <span>Objectif : ${exercise.repMin} à ${exercise.repMax} reps</span>
@@ -1190,7 +1177,7 @@ function programExerciseCardHtml(program, session, exercise, index, date){
         <span>${exercise.sets} série${exercise.sets > 1 ? "s" : ""}</span>
         <i aria-hidden="true">${open ? "⌃" : "⌄"}</i>
       </div>
-    </button>
+    </div>
     ${open ? `<div class="program-exercise-body">
       <div class="program-last-row">
         <span>Dernière perf :</span>
@@ -1255,13 +1242,37 @@ function trainingFreeHtml(){
   </div>`;
 }
 
+function programImportPanelHtml(compact = false){
+  return `<div class="program-import-panel ${compact ? "compact" : ""}">
+    <div>
+      <strong>Importer un programme JSON</strong>
+      <p class="small">Cet import est indépendant de la sauvegarde générale.</p>
+    </div>
+    <input type="file" id="programFileImport" accept=".json,application/json">
+    <button type="button" class="secondary program-import-btn" onclick="importProgramFile()">Importer le programme</button>
+  </div>`;
+}
+
+function programManagementHtml(program){
+  return `<div class="program-management-row">
+    <button type="button" class="secondary" onclick="exportSelectedProgram()">Exporter</button>
+    <button type="button" class="secondary" onclick="document.getElementById('programFileImport')?.click()">Importer un autre</button>
+    <button type="button" class="danger" onclick="deleteSelectedProgram()">Supprimer</button>
+  </div>`;
+}
+
 function trainingProgramHtml(){
   const program = getSelectedProgram();
   if(!program){
-    return `<div class="card"><h2>Programme</h2><p class="small">Aucun programme disponible pour le moment.</p></div>`;
+    return `<div class="card program-empty-card">
+      <div class="data-section-head"><div><span class="data-kicker">Bibliothèque</span><h2>Programmes</h2></div></div>
+      <p>Aucun programme n'est installé dans l'application.</p>
+      ${programImportPanelHtml()}
+    </div>`;
   }
   const session = getSelectedProgramSession();
   const progress = getProgramSessionProgress(program, session, programTrainingDate);
+  const programs = getPrograms();
   return `<div class="card program-shell-card">
     <div class="program-controls-grid">
       <div>
@@ -1271,13 +1282,13 @@ function trainingProgramHtml(){
       <div>
         <label>Programme</label>
         <select id="progSelect" onchange="setTrainingProgram(this.value)">
-          ${builtinPrograms.map(item => `<option value="${item.id}" ${item.id === program.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+          ${programs.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === program.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
         </select>
       </div>
       <div>
         <label>Séance</label>
         <select id="progSession" onchange="setTrainingProgramSession(this.value)">
-          ${(program.sessions || []).map(item => `<option value="${item.id}" ${item.id === session?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+          ${(program.sessions || []).map(item => `<option value="${escapeHtml(item.id)}" ${item.id === session?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
         </select>
       </div>
     </div>
@@ -1290,6 +1301,9 @@ function trainingProgramHtml(){
         <small>${escapeHtml(program.desc || "")}</small>
       </div>
     </section>
+
+    ${programManagementHtml(program)}
+    <input type="file" id="programFileImport" accept=".json,application/json" onchange="importProgramFile()" hidden>
 
     <div class="program-stats-row">
       <div class="program-stat-pill"><strong>${progress.started}/${(session?.exercises || []).length}</strong><span>exercices commencés</span></div>
@@ -1375,7 +1389,7 @@ function showTodayTraining(){
 
 function addProgramTraining(exerciseId){
   const [programId, sessionId, rawIndex] = String(exerciseId || "").split("_");
-  const program = builtinPrograms.find(item => item.id === programId) || getSelectedProgram();
+  const program = getPrograms().find(item => item.id === programId) || getSelectedProgram();
   const session = program?.sessions?.find(item => item.id === sessionId) || getSelectedProgramSession();
   const exercise = session?.exercises?.[Number(rawIndex)];
   if(!program || !session || !exercise) return;
@@ -2560,7 +2574,7 @@ function dataLibraryHtml(){
 }
 
 function dataBackupHtml(){
-  return `<div class="card"><div class="data-section-head"><div><span class="data-kicker">Sécurité</span><h2>Sauvegarde</h2></div></div><button class="green" onclick="exportData()">Exporter mes données</button><label>Importer JSON</label><input type="file" id="fileImport" accept=".json"><button onclick="importFile()">Importer le fichier</button></div><div class="card"><h2>Verrouillage</h2><input id="pinNew" type="password" inputmode="numeric" placeholder="Nouveau code, ou vide pour supprimer"><button onclick="savePin()">Enregistrer le code</button></div><div class="card danger-zone"><h2>Zone sensible</h2><button class="danger" onclick="resetData()">Tout supprimer</button></div>`;
+  return `<div class="card"><div class="data-section-head"><div><span class="data-kicker">Sécurité</span><h2>Sauvegarde</h2></div></div><button class="green" onclick="exportData()">Exporter mes données</button><p class="small">Les programmes sont gérés séparément dans Train → Programme.</p><label>Importer les données générales</label><input type="file" id="fileImport" accept=".json"><button onclick="importFile()">Importer le fichier</button></div><div class="card"><h2>Verrouillage</h2><input id="pinNew" type="password" inputmode="numeric" placeholder="Nouveau code, ou vide pour supprimer"><button onclick="savePin()">Enregistrer le code</button></div><div class="card danger-zone"><h2>Zone sensible</h2><button class="danger" onclick="resetData()">Tout supprimer</button></div>`;
 }
 
 function dataHtml(){
@@ -2657,7 +2671,8 @@ function settingsHtml(){
   </div>
   <div class="card"><h2>Sauvegarde</h2>
     <button class="green" onclick="exportData()">Exporter mes données</button>
-	<label>Importer JSON (fichier)</label><input type="file"id="fileImport"accept=".json"><button onclick="importFile()">Importer fichier JSON</button>
+    <p class="small">Les programmes sont importés et exportés séparément dans Train → Programme.</p>
+	<label>Importer les données générales</label><input type="file"id="fileImport"accept=".json"><button onclick="importFile()">Importer fichier JSON</button>
     <button class="danger" onclick="resetData()">Tout supprimer</button>
   </div>
   <div class="card"><h2>Listes disponibles</h2>
@@ -2780,7 +2795,9 @@ function savePin(){
   else { localStorage.removeItem(PIN_KEY); alert("Code supprimé."); }
 }
 function exportData(){
-  const text = JSON.stringify(state,null,2);
+  const generalData = Object.assign({}, state);
+  delete generalData.programs;
+  const text = JSON.stringify(generalData,null,2);
   navigator.clipboard?.writeText(text);
   const blob = new Blob([text],{type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -2804,6 +2821,10 @@ function importFile(){
       const parsedRaw = JSON.parse(e.target.result);
       if(!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)){
         throw new Error("Format de sauvegarde invalide");
+      }
+      if(parsedRaw.kind === "fitness-program"){
+        alert("Ce fichier est un programme. Importe-le depuis Train → Programme.");
+        return;
       }
 
       const parsed = normalizeState(parsedRaw);
@@ -2903,6 +2924,135 @@ function importFile(){
   };
 
   reader.readAsText(file);
+}
+
+function slugifyProgramId(value){
+  const normalized = String(value || "programme")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return normalized || `programme-${uid()}`;
+}
+
+function normalizeProgramDefinition(raw){
+  if(!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const name = String(raw.name || "").trim();
+  if(!name) return null;
+
+  const rawSessions = Array.isArray(raw.sessions) ? raw.sessions : [];
+  const sessions = rawSessions.map((session, sessionIndex) => {
+    if(!session || typeof session !== "object") return null;
+    const sessionName = String(session.name || `Séance ${sessionIndex + 1}`).trim();
+    const rawExercises = Array.isArray(session.exercises) ? session.exercises : [];
+    const exercises = rawExercises.map(exercise => {
+      if(!exercise || typeof exercise !== "object") return null;
+      const exerciseName = String(exercise.name || "").trim();
+      const sets = Math.max(1, Math.min(50, Math.round(Number(exercise.sets) || 0)));
+      const repMin = Math.max(1, Math.min(1000, Math.round(Number(exercise.repMin) || 1)));
+      const repMax = Math.max(repMin, Math.min(1000, Math.round(Number(exercise.repMax) || repMin)));
+      if(!exerciseName || !sets) return null;
+      return {name:exerciseName, sets, repMin, repMax};
+    }).filter(Boolean);
+    if(!sessionName || !exercises.length) return null;
+    return {
+      id: slugifyProgramId(session.id || `${sessionName}-${sessionIndex + 1}`),
+      name: sessionName,
+      exercises
+    };
+  }).filter(Boolean);
+
+  if(!sessions.length) return null;
+  return {
+    id: slugifyProgramId(raw.id || name),
+    name,
+    desc: String(raw.desc ?? raw.description ?? "").trim(),
+    sessions
+  };
+}
+
+function programFilePayload(program){
+  return {
+    kind:"fitness-program",
+    schemaVersion:1,
+    program
+  };
+}
+
+function importProgramFile(){
+  const input = document.getElementById("programFileImport");
+  const file = input?.files?.[0];
+  if(!file){
+    alert("Choisis un fichier programme JSON.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = event => {
+    try{
+      const parsed = JSON.parse(event.target.result);
+      if(!parsed || parsed.kind !== "fitness-program" || Number(parsed.schemaVersion) !== 1){
+        throw new Error("Ce fichier n'est pas un programme compatible.");
+      }
+      const program = normalizeProgramDefinition(parsed.program);
+      if(!program) throw new Error("Le programme ne contient aucune séance valide.");
+
+      state.programs = getPrograms().slice();
+      const existingIndex = state.programs.findIndex(item =>
+        item.id === program.id || normalizeText(item.name) === normalizeText(program.name)
+      );
+
+      if(existingIndex >= 0){
+        const replace = confirm(`Le programme « ${program.name} » existe déjà. Le remplacer ?`);
+        if(!replace) return;
+        state.programs.splice(existingIndex, 1, program);
+      }else{
+        state.programs.push(program);
+      }
+
+      selectedProgramId = program.id;
+      selectedProgramSessionId = program.sessions[0]?.id || "";
+      openProgramExerciseId = null;
+      save();
+      alert(`Programme importé : ${program.name} (${program.sessions.length} séances).`);
+      render();
+    }catch(error){
+      console.error("Import programme impossible", error);
+      alert(error?.message || "Le fichier programme JSON est invalide.");
+    }finally{
+      if(input) input.value = "";
+    }
+  };
+  reader.onerror = () => alert("Impossible de lire ce fichier programme.");
+  reader.readAsText(file);
+}
+
+function exportSelectedProgram(){
+  const program = getSelectedProgram();
+  if(!program) return alert("Aucun programme à exporter.");
+  const text = JSON.stringify(programFilePayload(program), null, 2);
+  const blob = new Blob([text], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${slugifyProgramId(program.name)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function deleteSelectedProgram(){
+  const program = getSelectedProgram();
+  if(!program) return;
+  if(!confirm(`Supprimer le programme « ${program.name} » ? Ton historique d'entraînement restera intact.`)) return;
+  state.programs = getPrograms().filter(item => item.id !== program.id);
+  const next = state.programs[0] || null;
+  selectedProgramId = next?.id || "";
+  selectedProgramSessionId = next?.sessions?.[0]?.id || "";
+  openProgramExerciseId = null;
+  save();
+  render();
 }
 
 function normalizeText(v){ return String(v || "").trim().toLowerCase(); }
@@ -4022,7 +4172,7 @@ function selectExercise(name){
 function registerFitnessServiceWorker(){
   if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=128").catch(error => {
+    navigator.serviceWorker.register("./service-worker.js?v=131").catch(error => {
       console.warn("Service worker non enregistré", error);
     });
   }, {once:true});
