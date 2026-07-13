@@ -1,0 +1,188 @@
+{
+  "kind": "fitness-program",
+  "schemaVersion": 1,
+  "program": {
+    "id": "programme-ayoub",
+    "name": "Programme Ayoub",
+    "desc": "Programme structuré sur 4 séances. Pour gros exos repos 2 à 2min30, 1min30 pour les autres",
+    "sessions": [
+      {
+        "id": "seance-1",
+        "name": "Séance 1 : Pecs + Epaules + Triceps",
+        "exercises": [
+          {
+            "name": "Pec deck",
+            "sets": 3,
+            "repMin": 12,
+            "repMax": 15
+          },
+          {
+            "name": "Chest press",
+            "sets": 2,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Smith incline bench press",
+            "sets": 2,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Élévation latérale poulie mid",
+            "sets": 3,
+            "repMin": 15,
+            "repMax": 20
+          },
+          {
+            "name": "Élévation latérale haltères",
+            "sets": 1,
+            "repMin": 15,
+            "repMax": 100
+          },
+          {
+            "name": "Développé militaire Smith",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Barre au front",
+            "sets": 2,
+            "repMin": 8,
+            "repMax": 15
+          }
+        ]
+      },
+      {
+        "id": "seance-2",
+        "name": "Séance 2 : Quads + Mollets + Abdos",
+        "exercises": [
+          {
+            "name": "Squat",
+            "sets": 2,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Leg press",
+            "sets": 2,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Leg extension",
+            "sets": 2,
+            "repMin": 10,
+            "repMax": 15
+          },
+          {
+            "name": "Mollets Perfect Squat",
+            "sets": 3,
+            "repMin": 15,
+            "repMax": 20
+          },
+          {
+            "name": "Crunch Poulie",
+            "sets": 3,
+            "repMin": 15,
+            "repMax": 20
+          },
+          {
+            "name": "Relevé de jambes",
+            "sets": 3,
+            "repMin": 10,
+            "repMax": 20
+          }
+        ]
+      },
+      {
+        "id": "seance-3",
+        "name": "Séance 3 : Dos + Biceps + Epaules",
+        "exercises": [
+          {
+            "name": "Pull-over",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 15
+          },
+          {
+            "name": "Tirage vertical",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Tirage unilatéral poulie basse",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 15
+          },
+          {
+            "name": "Tirage rowing prise large",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 15
+          },
+          {
+            "name": "Oiseau banc incliné",
+            "sets": 3,
+            "repMin": 10,
+            "repMax": 20
+          },
+          {
+            "name": "Curl double poulie 4",
+            "sets": 2,
+            "repMin": 10,
+            "repMax": 15
+          },
+          {
+            "name": "Curl banc incliné",
+            "sets": 2,
+            "repMin": 10,
+            "repMax": 15
+          },
+          {
+            "name": "Curl marteau",
+            "sets": 2,
+            "repMin": 10,
+            "repMax": 15
+          }
+        ]
+      },
+      {
+        "id": "seance-4",
+        "name": "Séance 4 : Ischios + Mollets",
+        "exercises": [
+          {
+            "name": "Adducteurs",
+            "sets": 3,
+            "repMin": 10,
+            "repMax": 20
+          },
+          {
+            "name": "Leg curl assis",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 15
+          },
+          {
+            "name": "RDL Smith",
+            "sets": 3,
+            "repMin": 8,
+            "repMax": 12
+          },
+          {
+            "name": "Mollet",
+            "sets": 2,
+            "repMin": 15,
+            "repMax": 20
+          }
+        ]
+      }
+    ],
+    "version": 1,
+    "level": "Intermédiaire",
+    "daysPerWeek": 4
+  }
+}

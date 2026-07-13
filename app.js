@@ -104,6 +104,12 @@ let selectedProgramSessionId = state.programs?.[0]?.sessions?.[0]?.id || "";
 let openProgramExerciseId = null;
 let programTrainingDate = today();
 
+const PROGRAM_CATALOG_URL = "./programmes/catalogue.json";
+let onlineProgramCatalog = [];
+let onlineProgramCatalogStatus = "idle";
+let onlineProgramCatalogMessage = "";
+let onlineProgramCatalogUpdatedAt = "";
+
 
 
 let weightD3ResizeObserver = null;
@@ -1242,6 +1248,162 @@ function trainingFreeHtml(){
   </div>`;
 }
 
+function normalizeCatalogEntry(raw, index){
+  if(!raw || typeof raw !== "object") return null;
+  const id = slugifyProgramId(raw.id || raw.name || `programme-${index + 1}`);
+  const name = String(raw.name || "").trim();
+  const file = String(raw.file || raw.url || "").trim();
+  if(!name || !file) return null;
+  return {
+    id,
+    name,
+    description: String(raw.description ?? raw.desc ?? "").trim(),
+    level: String(raw.level || "").trim(),
+    daysPerWeek: Math.max(0, Math.round(Number(raw.daysPerWeek) || 0)),
+    sessionsCount: Math.max(0, Math.round(Number(raw.sessionsCount) || 0)),
+    version: Math.max(1, Math.round(Number(raw.version) || 1)),
+    file
+  };
+}
+
+function onlineProgramInstallState(entry){
+  const installed = getPrograms().find(program =>
+    program.id === entry.id || normalizeText(program.name) === normalizeText(entry.name)
+  );
+  if(!installed) return {installed:null, label:"Installer", disabled:false, mode:"install"};
+  const installedVersion = Math.max(1, Number(installed.version) || 1);
+  if(entry.version > installedVersion){
+    return {installed, label:"Mettre à jour", disabled:false, mode:"update"};
+  }
+  return {installed, label:"Installé", disabled:true, mode:"installed"};
+}
+
+function onlineProgramLibraryHtml(){
+  let content = "";
+  if(onlineProgramCatalogStatus === "loading"){
+    content = `<div class="online-program-status">Chargement de la bibliothèque…</div>`;
+  }else if(onlineProgramCatalogStatus === "error"){
+    content = `<div class="online-program-status error">${escapeHtml(onlineProgramCatalogMessage || "Bibliothèque indisponible.")}</div>`;
+  }else if(onlineProgramCatalogStatus === "ready" && !onlineProgramCatalog.length){
+    content = `<div class="online-program-status">Aucun programme publié pour le moment.</div>`;
+  }else if(onlineProgramCatalog.length){
+    content = `<div class="online-program-list">${onlineProgramCatalog.map(entry => {
+      const installState = onlineProgramInstallState(entry);
+      const meta = [
+        entry.level,
+        entry.daysPerWeek ? `${entry.daysPerWeek} jour${entry.daysPerWeek > 1 ? "s" : ""}/semaine` : "",
+        entry.sessionsCount ? `${entry.sessionsCount} séance${entry.sessionsCount > 1 ? "s" : ""}` : "",
+        `v${entry.version}`
+      ].filter(Boolean).join(" · ");
+      return `<article class="online-program-card">
+        <div class="online-program-copy">
+          <strong>${escapeHtml(entry.name)}</strong>
+          ${entry.description ? `<p>${escapeHtml(entry.description)}</p>` : ""}
+          <small>${escapeHtml(meta)}</small>
+        </div>
+        <button type="button" class="${installState.disabled ? "secondary" : ""}" data-catalog-id="${escapeHtml(encodeData(entry.id))}" onclick="installOnlineProgram(decodeURIComponent(this.dataset.catalogId))" ${installState.disabled ? "disabled" : ""}>${escapeHtml(installState.label)}</button>
+      </article>`;
+    }).join("")}</div>`;
+  }else{
+    content = `<div class="online-program-status">Charge la bibliothèque pour voir les programmes disponibles.</div>`;
+  }
+
+  return `<div class="card online-program-library-card">
+    <div class="online-program-library-head">
+      <div>
+        <span class="data-kicker">GitHub</span>
+        <h2>Bibliothèque en ligne</h2>
+        <p class="small">Choisis un programme, puis installe-le dans l'application.</p>
+      </div>
+      <button type="button" class="secondary online-program-refresh" onclick="loadOnlineProgramCatalog(true)" ${onlineProgramCatalogStatus === "loading" ? "disabled" : ""}>${onlineProgramCatalogStatus === "loading" ? "Chargement…" : "Actualiser"}</button>
+    </div>
+    ${onlineProgramCatalogUpdatedAt ? `<p class="online-program-updated">Catalogue mis à jour : ${escapeHtml(onlineProgramCatalogUpdatedAt)}</p>` : ""}
+    ${content}
+  </div>`;
+}
+
+async function loadOnlineProgramCatalog(force = false){
+  if(onlineProgramCatalogStatus === "loading") return;
+  if(!force && onlineProgramCatalogStatus === "ready") return;
+  if(location.protocol === "file:"){
+    onlineProgramCatalogStatus = "error";
+    onlineProgramCatalogMessage = "La bibliothèque GitHub est disponible depuis le site en ligne, pas depuis un fichier ouvert directement sur Windows.";
+    render();
+    return;
+  }
+
+  onlineProgramCatalogStatus = "loading";
+  onlineProgramCatalogMessage = "";
+  render();
+
+  try{
+    const catalogUrl = new URL(PROGRAM_CATALOG_URL, location.href);
+    if(force) catalogUrl.searchParams.set("refresh", String(Date.now()));
+    const response = await fetch(catalogUrl.href, {cache:"no-store"});
+    if(!response.ok) throw new Error(`Catalogue indisponible (${response.status}).`);
+    const parsed = await response.json();
+    if(!parsed || parsed.kind !== "fitness-program-catalog" || Number(parsed.schemaVersion) !== 1){
+      throw new Error("Le catalogue GitHub n'a pas un format compatible.");
+    }
+    onlineProgramCatalog = (Array.isArray(parsed.programs) ? parsed.programs : [])
+      .map(normalizeCatalogEntry)
+      .filter(Boolean);
+    onlineProgramCatalogStatus = "ready";
+    onlineProgramCatalogUpdatedAt = String(parsed.updatedAt || "").trim();
+  }catch(error){
+    console.error("Catalogue programmes indisponible", error);
+    onlineProgramCatalogStatus = "error";
+    onlineProgramCatalogMessage = error?.message || "Impossible de charger la bibliothèque GitHub.";
+  }
+  render();
+}
+
+async function installOnlineProgram(catalogId){
+  const entry = onlineProgramCatalog.find(item => item.id === catalogId);
+  if(!entry) return alert("Programme introuvable dans le catalogue.");
+  const currentState = onlineProgramInstallState(entry);
+  if(currentState.disabled) return;
+
+  try{
+    const catalogUrl = new URL(PROGRAM_CATALOG_URL, location.href);
+    const programUrl = new URL(entry.file, catalogUrl);
+    programUrl.searchParams.set("v", String(entry.version));
+    const response = await fetch(programUrl.href, {cache:"no-store"});
+    if(!response.ok) throw new Error(`Téléchargement impossible (${response.status}).`);
+    const parsed = await response.json();
+    if(!parsed || parsed.kind !== "fitness-program" || Number(parsed.schemaVersion) !== 1){
+      throw new Error("Le fichier téléchargé n'est pas un programme compatible.");
+    }
+    const program = normalizeProgramDefinition(Object.assign({}, parsed.program, {
+      id: parsed.program?.id || entry.id,
+      name: parsed.program?.name || entry.name,
+      version: parsed.program?.version || entry.version,
+      level: parsed.program?.level || entry.level,
+      daysPerWeek: parsed.program?.daysPerWeek || entry.daysPerWeek
+    }));
+    if(!program) throw new Error("Le programme téléchargé ne contient aucune séance valide.");
+
+    state.programs = getPrograms().slice();
+    const existingIndex = state.programs.findIndex(item =>
+      item.id === program.id || normalizeText(item.name) === normalizeText(program.name)
+    );
+    if(existingIndex >= 0){
+      state.programs.splice(existingIndex, 1, program);
+    }else{
+      state.programs.push(program);
+    }
+    selectedProgramId = program.id;
+    selectedProgramSessionId = program.sessions[0]?.id || "";
+    openProgramExerciseId = null;
+    save();
+    alert(`${currentState.mode === "update" ? "Programme mis à jour" : "Programme installé"} : ${program.name}.`);
+    render();
+  }catch(error){
+    console.error("Installation programme impossible", error);
+    alert(error?.message || "Impossible d'installer ce programme.");
+  }
+}
+
 function programImportPanelHtml(compact = false){
   return `<div class="program-import-panel ${compact ? "compact" : ""}">
     <div>
@@ -1265,10 +1427,11 @@ function trainingProgramHtml(){
   const program = getSelectedProgram();
   if(!program){
     return `<div class="card program-empty-card">
-      <div class="data-section-head"><div><span class="data-kicker">Bibliothèque</span><h2>Programmes</h2></div></div>
+      <div class="data-section-head"><div><span class="data-kicker">Mes programmes</span><h2>Programmes installés</h2></div></div>
       <p>Aucun programme n'est installé dans l'application.</p>
       ${programImportPanelHtml()}
-    </div>`;
+    </div>
+    ${onlineProgramLibraryHtml()}`;
   }
   const session = getSelectedProgramSession();
   const progress = getProgramSessionProgress(program, session, programTrainingDate);
@@ -1314,6 +1477,7 @@ function trainingProgramHtml(){
       ${(session?.exercises || []).map((exercise, index) => programExerciseCardHtml(program, session, exercise, index, programTrainingDate)).join("")}
     </div>
   </div>
+  ${onlineProgramLibraryHtml()}
   <div class="card"><h2>Séance du jour</h2><div id="todayTraining"></div></div>`;
 }
 
@@ -2969,6 +3133,9 @@ function normalizeProgramDefinition(raw){
     id: slugifyProgramId(raw.id || name),
     name,
     desc: String(raw.desc ?? raw.description ?? "").trim(),
+    version: Math.max(1, Math.round(Number(raw.version) || 1)),
+    level: String(raw.level || "").trim(),
+    daysPerWeek: Math.max(0, Math.round(Number(raw.daysPerWeek) || 0)),
     sessions
   };
 }
@@ -3157,7 +3324,7 @@ function enhanceIOSDateInputs(){
 function afterRender(){
   enhanceIOSDateInputs();
   enableDatePickerFullClick();
-  if(current==="training"){ if(trainingMode === "free") showLastExercise(); showTodayTraining(); }
+  if(current==="training"){ if(trainingMode === "free") showLastExercise(); showTodayTraining(); if(trainingMode === "program" && onlineProgramCatalogStatus === "idle") setTimeout(() => loadOnlineProgramCatalog(), 0); }
   if(current==="meals"){ showTodayMeals(); }
   if(current==="data" && dataView==="library"){ currentDataTable = null; setDataTableButtons(null); }
   if(current==="weight"){ drawWeightChart(); }
@@ -4172,7 +4339,7 @@ function selectExercise(name){
 function registerFitnessServiceWorker(){
   if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=131").catch(error => {
+    navigator.serviceWorker.register("./service-worker.js?v=132").catch(error => {
       console.warn("Service worker non enregistré", error);
     });
   }, {once:true});

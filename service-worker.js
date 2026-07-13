@@ -1,11 +1,11 @@
-const CACHE_VERSION = "fitness-v131";
+const CACHE_VERSION = "fitness-v132";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=131",
-  "./app-fixes.css?v=131",
-  "./app.js?v=131",
-  "./manifest.json?v=131",
+  "./style.css?v=132",
+  "./app-fixes.css?v=132",
+  "./app.js?v=132",
+  "./manifest.json?v=132",
   "./assets/session_light_dos.webp",
   "./assets/session_light_pecs_epaules.webp",
   "./assets/session_light_jambes.webp",
@@ -46,6 +46,21 @@ self.addEventListener("fetch", event => {
           return response;
         })
         .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  if(url.origin === self.location.origin && url.pathname.includes("/programmes/")){
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if(response.ok){
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

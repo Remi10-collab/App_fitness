@@ -1,0 +1,17 @@
+{
+  "kind": "fitness-program-catalog",
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-13",
+  "programs": [
+    {
+      "id": "programme-ayoub",
+      "name": "Programme Ayoub",
+      "description": "Programme structuré sur 4 séances avec consignes de repos.",
+      "level": "Intermédiaire",
+      "daysPerWeek": 4,
+      "sessionsCount": 4,
+      "version": 1,
+      "file": "./programme-ayoub.json"
+    }
+  ]
+}

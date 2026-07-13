@@ -1022,3 +1022,118 @@ body[data-theme="galaxy"] .program-import-panel{
     grid-column:1 / -1;
   }
 }
+
+
+/* Étape 132 — bibliothèque GitHub de programmes */
+.online-program-library-card{
+  display:grid;
+  gap:12px;
+}
+.online-program-library-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.online-program-library-head h2{
+  margin:2px 0 4px;
+}
+.online-program-library-head .small{
+  margin:0;
+}
+.online-program-refresh{
+  width:auto !important;
+  min-width:100px;
+  flex:0 0 auto;
+  margin:0 !important;
+}
+.online-program-updated{
+  margin:0;
+  font-size:.74rem;
+  color:#73849c;
+}
+.online-program-list{
+  display:grid;
+  gap:10px;
+}
+.online-program-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:13px 14px;
+  border:1px solid rgba(148,163,184,.25);
+  border-radius:17px;
+  background:rgba(255,255,255,.48);
+}
+.online-program-copy{
+  min-width:0;
+}
+.online-program-copy strong{
+  display:block;
+  font-size:.98rem;
+}
+.online-program-copy p{
+  margin:4px 0;
+  font-size:.82rem;
+  line-height:1.35;
+  color:#6d7e97;
+}
+.online-program-copy small{
+  display:block;
+  color:#71839e;
+}
+.online-program-card button{
+  width:auto !important;
+  min-width:92px;
+  margin:0 !important;
+  padding:9px 12px !important;
+  min-height:40px !important;
+  border-radius:12px !important;
+  font-size:.86rem !important;
+}
+.online-program-card button:disabled{
+  opacity:.62;
+  cursor:default;
+}
+.online-program-status{
+  padding:13px 14px;
+  border:1px dashed rgba(148,163,184,.38);
+  border-radius:15px;
+  color:#71839e;
+  font-size:.84rem;
+}
+.online-program-status.error{
+  color:#b45309;
+  border-color:rgba(245,158,11,.35);
+  background:rgba(245,158,11,.06);
+}
+body[data-theme="light"] .online-program-card{
+  background:#fff;
+  border-color:#d8e2ec;
+}
+body[data-theme="galaxy"] .online-program-card{
+  background:rgba(7,15,33,.82);
+  border-color:rgba(126,160,198,.24);
+}
+body[data-theme="galaxy"] .online-program-copy p,
+body[data-theme="galaxy"] .online-program-copy small,
+body[data-theme="galaxy"] .online-program-updated,
+body[data-theme="galaxy"] .online-program-status{
+  color:#9fb0ca;
+}
+@media(max-width:520px){
+  .online-program-library-head{
+    align-items:stretch;
+  }
+  .online-program-refresh{
+    min-width:88px;
+    padding:8px 10px !important;
+  }
+  .online-program-card{
+    grid-template-columns:1fr;
+  }
+  .online-program-card button{
+    width:100% !important;
+  }
+}
