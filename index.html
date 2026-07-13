@@ -1,15 +1,29 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="galaxy">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Suivi Fitness</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="./style.css?v=116" />
+  <link rel="manifest" href="manifest.json?v=124" />
+  <link rel="apple-touch-icon" href="icons/app-icon-180.png" />
+  <script>
+    try {
+      const saved = JSON.parse(localStorage.getItem("suiviFitnessCompletV1") || "{}");
+      const theme = ["galaxy", "light"].includes(saved.theme || saved.settings?.theme)
+        ? (saved.theme || saved.settings.theme)
+        : "galaxy";
+      document.documentElement.dataset.theme = theme;
+    } catch (_) {}
+  </script>
+  <link rel="stylesheet" href="./style.css?v=128" />
+  <link rel="stylesheet" href="./app-fixes.css?v=128" />
 </head>
 <body>
   <div id="app"></div>
-  <script src="app.js?v=116"></script>
+  <script src="app.js?v=128"></script>
 </body>
 </html>

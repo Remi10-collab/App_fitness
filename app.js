@@ -87,8 +87,44 @@ let mealFormRepas = "PETIT DEJ";
 let customFoodFormOpen = false;
 let trainingDetailsOpen = false;
 let homeLastTrainingOpen = false;
+let editingTrainingId = null;
 let weightChartRange = "90";
 let weightHistoryOpen = false;
+let trainingMode = "free";
+let selectedProgramId = "test";
+let selectedProgramSessionId = "A";
+let openProgramExerciseId = null;
+let programTrainingDate = today();
+
+const builtinPrograms = [
+  {
+    id:"test",
+    name:"Programme Test",
+    desc:"Exemple simple pour valider l'interface programme.",
+    sessions:[
+      {
+        id:"A",
+        name:"Séance A",
+        exercises:[
+          {name:"Smith incline bench press", sets:3, repMin:8, repMax:12},
+          {name:"Pec deck", sets:3, repMin:10, repMax:15},
+          {name:"Tirage vertical", sets:3, repMin:8, repMax:12},
+          {name:"Curl marteau", sets:3, repMin:10, repMax:15}
+        ]
+      },
+      {
+        id:"B",
+        name:"Séance B",
+        exercises:[
+          {name:"Leg press", sets:4, repMin:8, repMax:12},
+          {name:"Leg curl assis", sets:3, repMin:10, repMax:15},
+          {name:"Mollets Perfect Squat", sets:4, repMin:12, repMax:20},
+          {name:"Reverse Fly", sets:3, repMin:12, repMax:20}
+        ]
+      }
+    ]
+  }
+];
 
 let weightD3ResizeObserver = null;
 let d3Promise = null;
@@ -234,7 +270,8 @@ function render(){
     <div class="subtitle">Musculation · Nutrition · Poids</div>
     ${screenHtml()}
   </div>
-  ${navHtml()}`;
+  ${navHtml()}
+  ${trainingEditModalHtml()}`;
   afterRender();
 }
 
@@ -778,6 +815,71 @@ function toggleHomeLastTrainingDetails(){
   render();
 }
 
+function groupTrainingRowsByExercise(rows){
+  const groups = [];
+  const byName = new Map();
+
+  // Les séries sont stockées de la plus récente à la plus ancienne.
+  // On repart de l'ordre de saisie afin de conserver l'ordre réel de la séance.
+  rows.slice().reverse().forEach((training, position) => {
+    const name = String(training.exercice || "Exercice").trim() || "Exercice";
+    if(!byName.has(name)){
+      const group = {name, rows: [], firstPosition: position};
+      byName.set(name, group);
+      groups.push(group);
+    }
+    byName.get(name).rows.push(training);
+  });
+
+  groups.forEach(group => {
+    group.rows.sort((a,b) => {
+      const seriesA = Number(a.serie);
+      const seriesB = Number(b.serie);
+      if(Number.isFinite(seriesA) && Number.isFinite(seriesB) && seriesA !== seriesB){
+        return seriesA - seriesB;
+      }
+      return 0;
+    });
+  });
+
+  return groups;
+}
+
+function trainingEditButtonHtml(id, compact = false){
+  return `<button type="button" class="icon-btn edit training-edit-btn${compact ? " compact" : ""}" aria-label="Modifier cette série" title="Modifier cette série" onclick="openTrainingEditor('${escapeHtml(id)}')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.1-.8L19 8.3a2.1 2.1 0 0 0 0-3l-.3-.3a2.1 2.1 0 0 0-3 0L4.8 15.9 4 20Z"/><path d="m14.6 6.1 3.3 3.3"/></svg>
+  </button>`;
+}
+
+function renderTrainingExerciseGroups(rows){
+  const groups = groupTrainingRowsByExercise(rows);
+  return `<div class="training-exercise-groups">
+    ${groups.map((group, exerciseIndex) => {
+      const setLines = [];
+      for(let start = 0; start < group.rows.length; start += 3){
+        const lineRows = group.rows.slice(start, start + 3);
+        setLines.push(`<div class="training-set-line">
+          ${lineRows.map((training, lineIndex) => {
+            const setIndex = start + lineIndex;
+            const seriesNumber = Number.isFinite(Number(training.serie)) ? Number(training.serie) : setIndex + 1;
+            return `<span class="training-set-inline">
+              <span class="training-set-text"><b>S${escapeHtml(seriesNumber)}</b><span> : ${escapeHtml(training.poids)} kg x ${escapeHtml(training.repetitions)} reps</span></span>
+              ${trainingEditButtonHtml(training.id, true)}
+            </span>`;
+          }).join('<i class="training-set-separator" aria-hidden="true">|</i>')}
+        </div>`);
+      }
+
+      return `<section class="training-exercise-group">
+        <div class="training-exercise-head">
+          <strong><span>${exerciseIndex + 1}.</span> ${escapeHtml(group.name)}</strong>
+        </div>
+        <div class="training-set-list">${setLines.join("")}</div>
+      </section>`;
+    }).join("")}
+  </div>`;
+}
+
 function renderHomeLastTrainingCard(){
   const sorted = state.trainings
     .slice()
@@ -805,7 +907,7 @@ function renderHomeLastTrainingCard(){
 
   const details = homeLastTrainingOpen
     ? `<div class="home-training-details">
-        ${rows.map(t=>row(`${t.exercice}`, `${t.poids} kg x ${t.repetitions}`)).join("")}
+        ${renderTrainingExerciseGroups(rows)}
       </div>`
     : "";
 
@@ -970,7 +1072,151 @@ function row(left, right, type=null, id=null){
   `;
 }
 
-function trainingHtml(){
+function trainingModeSwitchHtml(){
+  return `<div class="card train-mode-card">
+    <div class="train-mode-switch" role="tablist" aria-label="Mode d'entraînement">
+      <button type="button" class="train-mode-btn ${trainingMode === "free" ? "is-active" : ""}" aria-selected="${trainingMode === "free" ? "true" : "false"}" onclick="setTrainingMode('free')">Séance libre</button>
+      <button type="button" class="train-mode-btn ${trainingMode === "program" ? "is-active" : ""}" aria-selected="${trainingMode === "program" ? "true" : "false"}" onclick="setTrainingMode('program')">Programme</button>
+    </div>
+  </div>`;
+}
+
+function getSelectedProgram(){
+  return builtinPrograms.find(program => program.id === selectedProgramId) || builtinPrograms[0] || null;
+}
+
+function getSelectedProgramSession(){
+  const program = getSelectedProgram();
+  if(!program) return null;
+  return program.sessions.find(session => session.id === selectedProgramSessionId) || program.sessions[0] || null;
+}
+
+function programSessionLabel(program, session){
+  if(!program || !session) return "Programme";
+  return `${program.name} — ${session.name}`;
+}
+
+function setTrainingMode(mode){
+  const next = mode === "program" ? "program" : "free";
+  if(trainingMode === next) return;
+  trainingMode = next;
+  if(next === "program") trainingDetailsOpen = true;
+  render();
+}
+
+function setTrainingProgram(id){
+  selectedProgramId = builtinPrograms.some(program => program.id === id) ? id : (builtinPrograms[0]?.id || "test");
+  const session = getSelectedProgram()?.sessions?.[0];
+  selectedProgramSessionId = session?.id || "A";
+  openProgramExerciseId = null;
+  render();
+}
+
+function setTrainingProgramSession(id){
+  const program = getSelectedProgram();
+  selectedProgramSessionId = program?.sessions?.some(session => session.id === id) ? id : (program?.sessions?.[0]?.id || "A");
+  openProgramExerciseId = null;
+  render();
+}
+
+function setProgramTrainingDate(value){
+  if(!value) return;
+  programTrainingDate = value;
+  render();
+}
+
+function toggleProgramExercise(exerciseId){
+  openProgramExerciseId = openProgramExerciseId === exerciseId ? null : exerciseId;
+  render();
+}
+
+function getProgramSessionRows(program, session, date){
+  const tag = normalizeText(programSessionLabel(program, session));
+  return (state.trainings || []).filter(item => item.date === date && normalizeText(item.seance) === tag);
+}
+
+function getProgramExerciseRows(program, session, exerciseName, date){
+  return getProgramSessionRows(program, session, date)
+    .filter(item => normalizeText(item.exercice) === normalizeText(exerciseName))
+    .sort((a,b) => Number(a.serie || 0) - Number(b.serie || 0));
+}
+
+function getProgramExerciseProgress(program, session, exercise, date){
+  const rows = getProgramExerciseRows(program, session, exercise.name, date);
+  const done = Math.min(rows.length, exercise.sets);
+  return {
+    rows,
+    done,
+    nextSerie: Math.min(done + 1, exercise.sets),
+    isComplete: done >= exercise.sets
+  };
+}
+
+function getProgramSessionProgress(program, session, date){
+  const exercises = session?.exercises || [];
+  const details = exercises.map(exercise => getProgramExerciseProgress(program, session, exercise, date));
+  const started = details.filter(detail => detail.done > 0).length;
+  const validatedSets = details.reduce((total, detail) => total + detail.done, 0);
+  const totalSets = exercises.reduce((total, exercise) => total + (Number(exercise.sets) || 0), 0);
+  return {started, validatedSets, totalSets};
+}
+
+function getExerciseLastPerformance(exerciseName){
+  const rows = (state.trainings || [])
+    .filter(item => normalizeText(item.exercice) === normalizeText(exerciseName))
+    .sort((a,b) => {
+      const dateDiff = String(b.date || "").localeCompare(String(a.date || ""));
+      if(dateDiff !== 0) return dateDiff;
+      return Number(b.serie || 0) - Number(a.serie || 0);
+    });
+  return rows[0] || null;
+}
+
+function programExerciseCardHtml(program, session, exercise, index, date){
+  const exerciseId = `${program.id}_${session.id}_${index}`;
+  const open = openProgramExerciseId === exerciseId;
+  const progress = getProgramExerciseProgress(program, session, exercise, date);
+  const last = getExerciseLastPerformance(exercise.name);
+  const suggestedWeight = last?.poids ?? "";
+  const suggestedReps = last?.repetitions ?? exercise.repMin;
+
+  return `<article class="program-exercise-card ${open ? "is-open" : ""} ${progress.isComplete ? "is-complete" : ""}">
+    <button type="button" class="program-exercise-head" onclick="toggleProgramExercise('${exerciseId}')" aria-expanded="${open ? "true" : "false"}">
+      <div class="program-exercise-head-main">
+        <strong>${index + 1}. ${escapeHtml(exercise.name)}</strong>
+        <span>Objectif : ${exercise.repMin} à ${exercise.repMax} reps</span>
+      </div>
+      <div class="program-exercise-head-side">
+        <span>${exercise.sets} série${exercise.sets > 1 ? "s" : ""}</span>
+        <i aria-hidden="true">${open ? "⌃" : "⌄"}</i>
+      </div>
+    </button>
+    ${open ? `<div class="program-exercise-body">
+      <div class="program-last-row">
+        <span>Dernière perf :</span>
+        <strong>${last ? `${escapeHtml(last.poids)} kg x ${escapeHtml(last.repetitions)} reps` : "Aucun historique"}</strong>
+      </div>
+      <div class="program-current-row">Série ${progress.nextSerie} sur ${exercise.sets}</div>
+      <div class="program-entry-grid">
+        <div>
+          <label>Poids</label>
+          <input id="progWeight_${exerciseId}" inputmode="decimal" value="${escapeHtml(suggestedWeight)}" placeholder="kg">
+        </div>
+        <div>
+          <label>Répétitions</label>
+          <input id="progReps_${exerciseId}" inputmode="numeric" value="${escapeHtml(suggestedReps)}" placeholder="reps">
+        </div>
+      </div>
+      <button type="button" class="program-validate-btn" onclick="addProgramTraining('${exerciseId}')" ${progress.isComplete ? "disabled" : ""}>${progress.isComplete ? "Exercice complété" : "Valider la série"}</button>
+      <div class="program-progress-row">
+        <span>${progress.done}/${exercise.sets} séries validées</span>
+        <div class="program-progress-bar"><span style="width:${exercise.sets ? (progress.done / exercise.sets) * 100 : 0}%"></span></div>
+      </div>
+    </div>` : ""}
+  </article>`;
+}
+
+function trainingFreeHtml(){
   return `<div class="card"><h2>Ajouter une série</h2>
     <div class="train-top-row">
       <div class="train-field train-field-date">
@@ -1008,6 +1254,58 @@ function trainingHtml(){
     <button class="secondary" onclick="addExercise()">Ajouter à la liste</button>
   </div>`;
 }
+
+function trainingProgramHtml(){
+  const program = getSelectedProgram();
+  if(!program){
+    return `<div class="card"><h2>Programme</h2><p class="small">Aucun programme disponible pour le moment.</p></div>`;
+  }
+  const session = getSelectedProgramSession();
+  const progress = getProgramSessionProgress(program, session, programTrainingDate);
+  return `<div class="card program-shell-card">
+    <div class="program-controls-grid">
+      <div>
+        <label>Date</label>
+        <input id="progDate" type="date" value="${programTrainingDate}" max="${today()}" onchange="setProgramTrainingDate(this.value)">
+      </div>
+      <div>
+        <label>Programme</label>
+        <select id="progSelect" onchange="setTrainingProgram(this.value)">
+          ${builtinPrograms.map(item => `<option value="${item.id}" ${item.id === program.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label>Séance</label>
+        <select id="progSession" onchange="setTrainingProgramSession(this.value)">
+          ${(program.sessions || []).map(item => `<option value="${item.id}" ${item.id === session?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+
+    <section class="program-hero-card">
+      <div class="program-hero-icon" aria-hidden="true">🏋️</div>
+      <div class="program-hero-copy">
+        <h2>${escapeHtml(program.name)}</h2>
+        <p>${escapeHtml(session?.name || "Séance")}</p>
+        <small>${escapeHtml(program.desc || "")}</small>
+      </div>
+    </section>
+
+    <div class="program-stats-row">
+      <div class="program-stat-pill"><strong>${progress.started}/${(session?.exercises || []).length}</strong><span>exercices commencés</span></div>
+      <div class="program-stat-pill"><strong>${progress.validatedSets}/${progress.totalSets}</strong><span>séries validées</span></div>
+    </div>
+
+    <div class="program-exercise-list">
+      ${(session?.exercises || []).map((exercise, index) => programExerciseCardHtml(program, session, exercise, index, programTrainingDate)).join("")}
+    </div>
+  </div>
+  <div class="card"><h2>Séance du jour</h2><div id="todayTraining"></div></div>`;
+}
+
+function trainingHtml(){
+  return `${trainingModeSwitchHtml()}${trainingMode === "program" ? trainingProgramHtml() : trainingFreeHtml()}`;
+}
 function addTraining(){
   const item = {
     id:uid(), date:val("trDate"), seance:val("trSeance"), type:val("trType"), exercice:val("trExercice"),
@@ -1039,7 +1337,7 @@ function showLastExercise(){
   box.innerHTML = `<div class="pill">${fmt(lastDate)}</div>` + same.map(t=>row(`Série ${t.serie}`, `${t.poids} kg x ${t.repetitions}`)).join("");
 }
 function showTodayTraining(){
-  const d = document.getElementById("trDate")?.value || today();
+  const d = document.getElementById("trDate")?.value || document.getElementById("progDate")?.value || programTrainingDate || today();
   const rows = state.trainings.filter(t=>t.date===d);
   const box = document.getElementById("todayTraining");
   if(!box) return;
@@ -1068,11 +1366,61 @@ function showTodayTraining(){
 
   const details = trainingDetailsOpen
     ? `<div class="training-details-list">
-        ${rows.map(t=>row(`${t.exercice}`, `${t.poids} kg x ${t.repetitions}`)).join("")}
+        ${renderTrainingExerciseGroups(rows)}
       </div>`
     : "";
 
   box.innerHTML = summary + toggle + details;
+}
+
+function addProgramTraining(exerciseId){
+  const [programId, sessionId, rawIndex] = String(exerciseId || "").split("_");
+  const program = builtinPrograms.find(item => item.id === programId) || getSelectedProgram();
+  const session = program?.sessions?.find(item => item.id === sessionId) || getSelectedProgramSession();
+  const exercise = session?.exercises?.[Number(rawIndex)];
+  if(!program || !session || !exercise) return;
+
+  const date = document.getElementById("progDate")?.value || programTrainingDate || today();
+  const weightValue = document.getElementById(`progWeight_${exerciseId}`)?.value || "";
+  const repsValue = document.getElementById(`progReps_${exerciseId}`)?.value || "";
+  const poids = Number(String(weightValue).replace(",", "."));
+  const repetitions = Number(repsValue);
+
+  if(!date || !poids || !repetitions){
+    alert("Renseigne la date, le poids et les répétitions.");
+    return;
+  }
+  if(!checkNotFutureDate(date)) return;
+
+  const progress = getProgramExerciseProgress(program, session, exercise, date);
+  if(progress.done >= exercise.sets){
+    alert("Toutes les séries prévues pour cet exercice sont déjà validées.");
+    return;
+  }
+
+  if(exercise.name && !state.exercises.some(name => normalizeText(name) === normalizeText(exercise.name))){
+    state.exercises.push(exercise.name);
+  }
+
+  const item = {
+    id: uid(),
+    date,
+    seance: programSessionLabel(program, session),
+    type: "1",
+    exercice: exercise.name,
+    serie: progress.done + 1,
+    poids,
+    repetitions,
+  };
+  item.volume = item.poids * item.repetitions;
+  item.semaine = weekNumber(item.date);
+  item.mois = monthName(item.date);
+  state.trainings.unshift(item);
+  save();
+  trainingDetailsOpen = true;
+  openProgramExerciseId = exerciseId;
+  programTrainingDate = date;
+  render();
 }
 
 function mealRepasOptions(selected){
@@ -2168,6 +2516,15 @@ function dataDateBar(kind, date){
   return `<div class="data-date-bar"><button type="button" class="data-date-arrow" onclick="changeDataDate('${kind}',-1)" aria-label="Jour précédent">‹</button><input type="date" value="${date}" max="${today()}" onchange="setDataDate('${kind}',this.value)"><button type="button" class="data-date-arrow" onclick="changeDataDate('${kind}',1)" aria-label="Jour suivant" ${date>=today()?"disabled":""}>›</button></div>`;
 }
 
+function prepareDataExerciseAccordion(summary){
+  const current = summary?.closest("details.data-exercise-block");
+  const list = current?.closest(".data-exercise-list");
+  if(!current || !list || current.open) return;
+  list.querySelectorAll("details.data-exercise-block[open]").forEach(details=>{
+    if(details !== current) details.removeAttribute("open");
+  });
+}
+
 function dataTrainingsHtml(){
   const rows=(state.trainings||[]).filter(x=>x.date===dataTrainingDate).slice().reverse();
   const groups=[]; const map=new Map();
@@ -2175,7 +2532,7 @@ function dataTrainingsHtml(){
   const volume=rows.reduce((a,x)=>a+(Number(x.poids)||0)*(Number(x.repetitions)||0),0);
   return `<div class="card data-history-card"><div class="data-section-head"><div><span class="data-kicker">Historique ciblé</span><h2>Entraînements</h2></div></div>${dataDateBar("trainings",dataTrainingDate)}
     ${rows.length?`<div class="data-day-summary"><span>${groups.length} exercice${groups.length>1?"s":""}</span><span>${rows.length} série${rows.length>1?"s":""}</span><span>${Math.round(volume).toLocaleString("fr-FR")} kg</span></div>
-    <div class="data-exercise-list">${groups.map((g,index)=>`<details class="data-exercise-block" ${index===0?"open":""}><summary><div><span class="data-exercise-index">Exercice ${index+1}</span><strong>${escapeHtml(g.name)}</strong></div><span>${g.rows.length} série${g.rows.length>1?"s":""}</span></summary><div class="data-series-list">${g.rows.map((x,i)=>`<div class="data-series-row"><span>S${escapeHtml(x.serie||i+1)}</span><strong>${escapeHtml(x.poids)} kg</strong><span>${escapeHtml(x.repetitions)} reps</span><button class="icon-btn delete" onclick="deleteItem('trainings','${x.id}')">×</button></div>`).join("")}</div></details>`).join("")}</div>`:`<p class="data-empty">Aucune séance enregistrée à cette date.</p>`}
+    <div class="data-exercise-list">${groups.map((g,index)=>`<details class="data-exercise-block"><summary onclick="prepareDataExerciseAccordion(this)"><div class="data-exercise-title"><span class="data-exercise-number">${index+1}.</span><strong>${escapeHtml(g.name)}</strong></div><span>${g.rows.length} série${g.rows.length>1?"s":""}</span></summary><div class="data-series-list">${g.rows.map((x,i)=>`<div class="data-series-row"><span class="data-series-value"><b>S${escapeHtml(x.serie||i+1)}</b><span> : ${escapeHtml(x.poids)} kg x ${escapeHtml(x.repetitions)} reps</span></span><div class="data-series-actions">${trainingEditButtonHtml(x.id)}<button class="icon-btn delete" aria-label="Supprimer cette série" title="Supprimer cette série" onclick="deleteItem('trainings','${x.id}')">×</button></div></div>`).join("")}</div></details>`).join("")}</div>`:`<p class="data-empty">Aucune séance enregistrée à cette date.</p>`}
   </div>`;
 }
 
@@ -2320,6 +2677,7 @@ function escapeHtml(v){
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+function encodeData(v){ return encodeURIComponent(String(v ?? "")); }
 
 let currentDataTable = null;
 
@@ -2361,7 +2719,7 @@ function showDataTable(type){
         <div class="table-row data-exercise-row">
           <div>${i + 1}</div>
           <div>${escapeHtml(e)}</div>
-          <div><button class="icon-btn delete" onclick='deleteListItem("exercises", ${JSON.stringify(e)})' aria-label="Supprimer" title="Supprimer">×</button></div>
+          <div><button class="icon-btn delete" data-value="${encodeData(e)}" onclick="deleteListItem('exercises', decodeURIComponent(this.dataset.value))" aria-label="Supprimer" title="Supprimer">×</button></div>
         </div>
       `).join("") || `<p class="small">Aucun exercice.</p>`}
     `;
@@ -2383,7 +2741,7 @@ function showDataTable(type){
           <div>${escapeHtml(f.prot)}</div>
           <div>${escapeHtml(f.gluc)}</div>
           <div>${escapeHtml(f.lip)}</div>
-          <div><button class="icon-btn delete" onclick='deleteListItem("foods", ${JSON.stringify(f.name)})' aria-label="Supprimer" title="Supprimer">×</button></div>
+          <div><button class="icon-btn delete" data-value="${encodeData(f.name)}" onclick="deleteListItem('foods', decodeURIComponent(this.dataset.value))" aria-label="Supprimer" title="Supprimer">×</button></div>
         </div>
       `).join("") || `<p class="small">Aucun aliment.</p>`}
     `;
@@ -2431,8 +2789,8 @@ function exportData(){
   URL.revokeObjectURL(url);
 }
 function importFile(){
-
-  const file = document.getElementById("fileImport").files[0];
+  const input = document.getElementById("fileImport");
+  const file = input?.files?.[0];
 
   if(!file){
     alert("Choisis un fichier JSON");
@@ -2443,88 +2801,108 @@ function importFile(){
 
   reader.onload = function(e){
     try{
-      const parsed = JSON.parse(e.target.result);
+      const parsedRaw = JSON.parse(e.target.result);
+      if(!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)){
+        throw new Error("Format de sauvegarde invalide");
+      }
+
+      const parsed = normalizeState(parsedRaw);
       const before = {
         weights: state.weights.length,
         trainings: state.trainings.length,
         meals: state.meals.length,
         favoriteMeals: (state.favoriteMeals || []).length,
+        muscles: state.muscles.length,
         exercises: state.exercises.length,
         foods: state.foods.length
       };
 
-      if(Array.isArray(parsed.weights)){
-        parsed.weights.forEach(w => {
-          if(!state.weights.some(x => sameWeight(x, w))){
-            state.weights.push(w);
-          }
-        });
-      }
+      parsed.weights.forEach(w => {
+        if(w && w.date && Number.isFinite(normalizeNum(w.poids)) && !state.weights.some(x => sameWeight(x, w))){
+          state.weights.push(Object.assign({}, w, {id:w.id || uid(), poids:normalizeNum(w.poids)}));
+        }
+      });
 
-      if(Array.isArray(parsed.trainings)){
-        parsed.trainings.forEach(t => {
-          if(!state.trainings.some(x => sameTraining(x, t))){
-            state.trainings.push(t);
-          }
-        });
-      }
+      parsed.trainings.forEach(t => {
+        if(t && t.date && t.exercice && !state.trainings.some(x => sameTraining(x, t))){
+          state.trainings.push(Object.assign({}, t, {id:t.id || uid()}));
+        }
+      });
 
-      if(Array.isArray(parsed.meals)){
-        parsed.meals.forEach(m => {
-          if(!state.meals.some(x => sameMeal(x, m))){
-            state.meals.push(m);
-          }
-        });
-      }
+      parsed.meals.forEach(m => {
+        if(m && m.date && m.aliment && !state.meals.some(x => sameMeal(x, m))){
+          state.meals.push(Object.assign({}, m, {id:m.id || uid()}));
+        }
+      });
 
-      if(Array.isArray(parsed.favoriteMeals)){
-        parsed.favoriteMeals.forEach(favorite => {
-          const valid = favorite && favorite.name && Array.isArray(favorite.items);
-          const exists = (state.favoriteMeals || []).some(x =>
-            (favorite.id && x.id === favorite.id) ||
-            (normalizeText(x.name) === normalizeText(favorite.name) && favoriteSignature(x.items) === favoriteSignature(favorite.items))
-          );
-          if(valid && !exists){
-            state.favoriteMeals.push({
-              id: favorite.id || uid(),
-              name: String(favorite.name).trim(),
-              repas: favorite.repas || "PETIT DEJ",
-              createdAt: favorite.createdAt || new Date().toISOString(),
-              items: favorite.items.map(item => ({aliment:String(item.aliment || "").trim(), qte:normalizeNum(item.qte)})).filter(item => item.aliment && item.qte > 0)
-            });
-          }
-        });
-      }
+      parsed.favoriteMeals.forEach(favorite => {
+        const valid = favorite && favorite.name && Array.isArray(favorite.items);
+        const exists = (state.favoriteMeals || []).some(x =>
+          (favorite.id && x.id === favorite.id) ||
+          (normalizeText(x.name) === normalizeText(favorite.name) && favoriteSignature(x.items) === favoriteSignature(favorite.items))
+        );
+        if(valid && !exists){
+          state.favoriteMeals.push({
+            id: favorite.id || uid(),
+            name: String(favorite.name).trim(),
+            repas: favorite.repas || "PETIT DEJ",
+            createdAt: favorite.createdAt || new Date().toISOString(),
+            items: favorite.items
+              .map(item => ({aliment:String(item.aliment || "").trim(), qte:normalizeNum(item.qte)}))
+              .filter(item => item.aliment && item.qte > 0)
+          });
+        }
+      });
 
-      if(Array.isArray(parsed.exercises)){
-        parsed.exercises.forEach(ex => addUniqueExercise(ex));
-      }
+      parsed.muscles.forEach(muscle => {
+        const clean = String(muscle || "").trim();
+        if(clean && !state.muscles.some(x => normalizeText(x) === normalizeText(clean))){
+          state.muscles.push(clean);
+        }
+      });
+      parsed.exercises.forEach(ex => addUniqueExercise(ex));
+      parsed.foods.forEach(f => addUniqueFood(f));
 
-      if(Array.isArray(parsed.foods)){
-        parsed.foods.forEach(f => addUniqueFood(f));
-      }
+      // La sauvegarde est maintenant réellement complète : profil, objectifs et thème sont restaurés.
+      state.profile = Object.assign(defaultProfile(), parsed.profile || {});
+      state.settings = Object.assign(defaultSettings(), parsed.settings || {});
+      const importedTheme = ["galaxy", "light"].includes(parsedRaw.theme || state.settings.theme)
+        ? (parsedRaw.theme || state.settings.theme)
+        : currentTheme();
+      state.theme = importedTheme;
+      state.settings.theme = importedTheme;
 
+      state = normalizeState(state);
       save();
+      applyTheme();
 
       const added = {
         weights: state.weights.length - before.weights,
         trainings: state.trainings.length - before.trainings,
         meals: state.meals.length - before.meals,
         favoriteMeals: (state.favoriteMeals || []).length - before.favoriteMeals,
+        muscles: state.muscles.length - before.muscles,
         exercises: state.exercises.length - before.exercises,
         foods: state.foods.length - before.foods
       };
 
-      alert(`Import réussi. Ajoutés : ${added.trainings} entraînements, ${added.meals} repas, ${added.favoriteMeals} favoris, ${added.weights} poids, ${added.exercises} exercices, ${added.foods} aliments.`);
+      alert(`Import réussi. Profil et réglages restaurés. Ajoutés : ${added.trainings} entraînements, ${added.meals} repas, ${added.favoriteMeals} favoris, ${added.weights} poids, ${added.exercises} exercices, ${added.foods} aliments.`);
       render();
     }
-    catch(e){
-      alert("Erreur JSON");
+    catch(error){
+      console.error("Import impossible", error);
+      alert("Le fichier JSON est invalide ou incompatible.");
+    }
+    finally{
+      if(input) input.value = "";
     }
   };
 
-  reader.readAsText(file);
+  reader.onerror = function(){
+    alert("Impossible de lire ce fichier.");
+  };
 
+  reader.readAsText(file);
 }
 
 function normalizeText(v){ return String(v || "").trim().toLowerCase(); }
@@ -2629,22 +3007,20 @@ function enhanceIOSDateInputs(){
 function afterRender(){
   enhanceIOSDateInputs();
   enableDatePickerFullClick();
-  if(current==="training"){ showLastExercise(); showTodayTraining(); }
+  if(current==="training"){ if(trainingMode === "free") showLastExercise(); showTodayTraining(); }
   if(current==="meals"){ showTodayMeals(); }
   if(current==="data" && dataView==="library"){ currentDataTable = null; setDataTableButtons(null); }
   if(current==="weight"){ drawWeightChart(); }
 }
 function loadD3(){
   if(window.d3) return Promise.resolve(window.d3);
-
   if(d3Promise) return d3Promise;
 
   d3Promise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-d3="true"]');
-
     if(existing){
-      existing.addEventListener("load", () => resolve(window.d3));
-      existing.addEventListener("error", reject);
+      existing.addEventListener("load", () => window.d3 ? resolve(window.d3) : reject(new Error("D3 indisponible")), {once:true});
+      existing.addEventListener("error", () => reject(new Error("D3 indisponible")), {once:true});
       return;
     }
 
@@ -2652,14 +3028,9 @@ function loadD3(){
     script.src = "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js";
     script.async = true;
     script.dataset.d3 = "true";
-
-    script.onload = () => {
-      if(window.d3) resolve(window.d3);
-      else reject(new Error("D3 introuvable après chargement."));
-    };
-
-    script.onerror = () => reject(new Error("Impossible de charger D3. Connexion internet requise."));
-
+    script.crossOrigin = "anonymous";
+    script.onload = () => window.d3 ? resolve(window.d3) : reject(new Error("D3 indisponible"));
+    script.onerror = () => reject(new Error("Mode hors ligne"));
     document.head.appendChild(script);
   });
 
@@ -2698,9 +3069,61 @@ function renderWeightChartFallback(message){
   el.innerHTML = `
     <div class="chart-fallback">
       <strong>Graphique indisponible</strong>
-      <span>${message}</span>
+      <span>${escapeHtml(message)}</span>
     </div>
   `;
+}
+
+function renderNativeWeightChart(rows, notice="Mode hors ligne · graphique simplifié"){
+  const el = document.getElementById("weightD3Chart");
+  if(!el || !Array.isArray(rows) || rows.length < 2) return false;
+
+  const data = rows
+    .map(r => ({date:new Date(String(r.date)+"T00:00:00"), iso:String(r.date), poids:Number(r.poids)}))
+    .filter(d => Number.isFinite(d.date.getTime()) && Number.isFinite(d.poids));
+  if(data.length < 2) return false;
+
+  const width = Math.max(300, Math.round(el.clientWidth || 430));
+  const height = Math.max(320, Math.round(el.clientHeight || 380));
+  const margin = {top:34,right:18,bottom:50,left:45};
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+  const t0 = data[0].date.getTime();
+  const t1 = data[data.length-1].date.getTime();
+  const minRaw = Math.min(...data.map(d => d.poids));
+  const maxRaw = Math.max(...data.map(d => d.poids));
+  const pad = Math.max(.4, (maxRaw-minRaw)*.2);
+  const yMin = minRaw-pad;
+  const yMax = maxRaw+pad;
+  const x = d => margin.left + ((d.date.getTime()-t0) / Math.max(1,t1-t0))*innerW;
+  const y = d => margin.top + (1-((d.poids-yMin)/Math.max(.1,yMax-yMin)))*innerH;
+  const points = data.map(d => `${x(d).toFixed(1)},${y(d).toFixed(1)}`).join(" ");
+  const area = `${margin.left},${margin.top+innerH} ${points} ${margin.left+innerW},${margin.top+innerH}`;
+  const target = getWeightTarget();
+  const targetY = Number.isFinite(Number(target)) && Number(target)>=yMin && Number(target)<=yMax
+    ? margin.top + (1-((Number(target)-yMin)/(yMax-yMin)))*innerH
+    : null;
+
+  const yTicks = Array.from({length:5},(_,i)=> yMin+(yMax-yMin)*(i/4));
+  const xIndices = [...new Set([0, Math.floor((data.length-1)/2), data.length-1])];
+  const grid = yTicks.map(v => {
+    const py = margin.top + (1-((v-yMin)/(yMax-yMin)))*innerH;
+    return `<line x1="${margin.left}" y1="${py}" x2="${margin.left+innerW}" y2="${py}" class="native-grid"/><text x="${margin.left-8}" y="${py+4}" text-anchor="end" class="native-axis-label">${v.toFixed(1)}</text>`;
+  }).join("");
+  const xLabels = xIndices.map(i => `<text x="${x(data[i])}" y="${height-18}" text-anchor="middle" class="native-axis-label">${formatDateShort(data[i].iso)}</text>`).join("");
+  const dots = data.map((d,i)=>`<circle cx="${x(d)}" cy="${y(d)}" r="${i===data.length-1?4.5:3}" class="native-dot"><title>${formatDateShort(d.iso)} · ${d.poids.toLocaleString("fr-FR")} kg</title></circle>`).join("");
+
+  el.innerHTML = `<div class="native-chart-notice">${escapeHtml(notice)}</div>
+    <svg viewBox="0 0 ${width} ${height}" class="native-weight-svg" role="img" aria-label="Évolution du poids">
+      ${grid}
+      ${targetY===null?"":`<line x1="${margin.left}" y1="${targetY}" x2="${margin.left+innerW}" y2="${targetY}" class="native-target"/><text x="${margin.left+innerW-4}" y="${targetY-6}" text-anchor="end" class="native-target-label">Objectif ${Number(target).toLocaleString("fr-FR")} kg</text>`}
+      <polygon points="${area}" class="native-area"/>
+      <polyline points="${points}" class="native-line"/>
+      ${dots}
+      ${xLabels}
+      <text x="${margin.left}" y="18" class="native-chart-title">${data[data.length-1].poids.toLocaleString("fr-FR")} kg</text>
+    </svg>`;
+  return true;
 }
 
 function calcVisibleWeightDomain(data){
@@ -2814,7 +3237,9 @@ async function drawWeightChart(){
   try{
     d3 = await loadD3();
   }catch(e){
-    renderWeightChartFallback(e.message || "Erreur de chargement.");
+    if(!renderNativeWeightChart(rows)){
+      renderWeightChartFallback(e.message || "Erreur de chargement.");
+    }
     return;
   }
 
@@ -3358,6 +3783,90 @@ async function drawWeightChart(){
 }
 
 
+function trainingEditModalHtml(){
+  if(!editingTrainingId) return "";
+  const item = state.trainings.find(x => x.id === editingTrainingId);
+  if(!item){ editingTrainingId = null; return ""; }
+
+  const muscleOptions = [...new Set([...(state.muscles || []), item.seance].filter(Boolean))]
+    .map(name => `<option value="${escapeHtml(name)}" ${name === item.seance ? "selected" : ""}>${escapeHtml(name)}</option>`)
+    .join("");
+  const exerciseOptions = [...new Set([...(state.exercises || []), item.exercice].filter(Boolean))]
+    .sort((a,b) => String(a).localeCompare(String(b), "fr"))
+    .map(name => `<option value="${escapeHtml(name)}" ${name === item.exercice ? "selected" : ""}>${escapeHtml(name)}</option>`)
+    .join("");
+
+  return `<div class="training-edit-overlay" role="presentation" onclick="if(event.target===this) closeTrainingEditor()">
+    <section class="training-edit-modal" role="dialog" aria-modal="true" aria-labelledby="trainingEditTitle">
+      <div class="training-edit-head">
+        <div><span>Modification</span><h2 id="trainingEditTitle">Modifier la série</h2></div>
+        <button type="button" class="training-edit-close" aria-label="Fermer" onclick="closeTrainingEditor()">×</button>
+      </div>
+      <div class="training-edit-grid top">
+        <div><label>Date</label><input id="editTrDate" type="date" max="${today()}" value="${escapeHtml(item.date)}"></div>
+        <div><label>Séance</label><select id="editTrSeance">${muscleOptions}</select></div>
+        <div><label>Type</label><select id="editTrType">${[1,2,3,4].map(v => `<option ${String(v)===String(item.type)?"selected":""}>${v}</option>`).join("")}</select></div>
+      </div>
+      <div><label>Exercice</label><select id="editTrExercice">${exerciseOptions}</select></div>
+      <div class="training-edit-grid values">
+        <div><label>Série</label><input id="editTrSerie" inputmode="numeric" value="${escapeHtml(item.serie)}"></div>
+        <div><label>Poids</label><input id="editTrPoids" inputmode="decimal" value="${escapeHtml(item.poids)}"></div>
+        <div><label>Répétitions</label><input id="editTrReps" inputmode="numeric" value="${escapeHtml(item.repetitions)}"></div>
+      </div>
+      <div class="training-edit-actions">
+        <button type="button" class="secondary" onclick="closeTrainingEditor()">Annuler</button>
+        <button type="button" onclick="saveTrainingEditor()">Enregistrer</button>
+      </div>
+    </section>
+  </div>`;
+}
+
+function openTrainingEditor(id){
+  if(!state.trainings.some(x => x.id === id)) return;
+  editingTrainingId = id;
+  render();
+  requestAnimationFrame(() => document.getElementById("editTrPoids")?.focus());
+}
+
+function closeTrainingEditor(){
+  editingTrainingId = null;
+  render();
+}
+
+function saveTrainingEditor(){
+  const item = state.trainings.find(x => x.id === editingTrainingId);
+  if(!item) return closeTrainingEditor();
+
+  const date = val("editTrDate");
+  const seance = val("editTrSeance");
+  const type = val("editTrType");
+  const exercice = val("editTrExercice");
+  const serie = Number(val("editTrSerie"));
+  const poids = Number(val("editTrPoids").replace(",", "."));
+  const repetitions = Number(val("editTrReps"));
+
+  if(!date || !seance || !exercice || !Number.isFinite(serie) || serie < 1 || !Number.isFinite(poids) || poids <= 0 || !Number.isFinite(repetitions) || repetitions < 1){
+    alert("Vérifie la date, la séance, l'exercice, le numéro de série, le poids et les répétitions.");
+    return;
+  }
+  if(!checkNotFutureDate(date)) return;
+
+  item.date = date;
+  item.seance = seance;
+  item.type = type;
+  item.exercice = exercice;
+  item.serie = Math.trunc(serie);
+  item.poids = poids;
+  item.repetitions = Math.trunc(repetitions);
+  item.volume = item.poids * item.repetitions;
+  item.semaine = weekNumber(item.date);
+  item.mois = monthName(item.date);
+
+  save();
+  editingTrainingId = null;
+  render();
+}
+
 function deleteItem(type, id){
 
   if(!confirm("Supprimer cette donnée ?")) return;
@@ -3386,13 +3895,8 @@ function editItem(type, id){
   }
 
   if(type === "trainings"){
-    const p = prompt("Poids :", item.poids);
-    const r = prompt("Répétitions :", item.repetitions);
-    if(p === null || r === null) return;
-
-    item.poids = Number(p.replace(",", "."));
-    item.repetitions = Number(r);
-    item.volume = item.poids * item.repetitions;
+    openTrainingEditor(id);
+    return;
   }
 
   if(type === "meals"){
@@ -3441,21 +3945,16 @@ function num(id){ return Number(val(id).replace(",",".")) || 0; }
 function filterFoods(){
   const input = document.getElementById("mealFood");
   const box = document.getElementById("foodSuggestions");
-
   if(!input || !box) return;
 
   const query = input.value.toLowerCase().trim();
-
   if(query.length < 2){
     box.innerHTML = "";
     box.style.display = "none";
     return;
   }
 
-  const results = state.foods.filter(f =>
-    f.name.toLowerCase().includes(query)
-  );
-
+  const results = state.foods.filter(f => String(f.name || "").toLowerCase().includes(query));
   if(results.length === 0){
     box.innerHTML = "";
     box.style.display = "none";
@@ -3463,12 +3962,13 @@ function filterFoods(){
   }
 
   box.innerHTML = results.map(f => `
-    <div class="suggestion-item"
-      onclick="selectFood('${f.name.replace(/'/g, "\\'")}')">
-      ${f.name}
+    <div class="suggestion-item" role="button" tabindex="0"
+      data-value="${encodeData(f.name)}"
+      onclick="selectFood(decodeURIComponent(this.dataset.value))"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectFood(decodeURIComponent(this.dataset.value));}">
+      ${escapeHtml(f.name)}
     </div>
   `).join("");
-
   box.style.display = "block";
 }
 
@@ -3481,21 +3981,16 @@ function selectFood(name){
 function filterExercises(){
   const input = document.getElementById("trExercice");
   const box = document.getElementById("exerciseSuggestions");
-
   if(!input || !box) return;
 
   const query = input.value.toLowerCase().trim();
-
   if(query.length < 2){
     box.innerHTML = "";
     box.style.display = "none";
     return;
   }
 
-  const results = state.exercises.filter(e =>
-    e.toLowerCase().includes(query)
-  );
-
+  const results = state.exercises.filter(e => String(e || "").toLowerCase().includes(query));
   if(results.length === 0){
     box.innerHTML = "";
     box.style.display = "none";
@@ -3503,12 +3998,13 @@ function filterExercises(){
   }
 
   box.innerHTML = results.map(e => `
-    <div class="suggestion-item"
-      onclick="selectExercise('${e.replace(/'/g, "\\'")}')">
-      ${e}
+    <div class="suggestion-item" role="button" tabindex="0"
+      data-value="${encodeData(e)}"
+      onclick="selectExercise(decodeURIComponent(this.dataset.value))"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectExercise(decodeURIComponent(this.dataset.value));}">
+      ${escapeHtml(e)}
     </div>
   `).join("");
-
   box.style.display = "block";
 }
 
@@ -3523,4 +4019,14 @@ function selectExercise(name){
   showLastExercise();
 }
 
+function registerFitnessServiceWorker(){
+  if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js?v=128").catch(error => {
+      console.warn("Service worker non enregistré", error);
+    });
+  }, {once:true});
+}
+
+registerFitnessServiceWorker();
 render();
