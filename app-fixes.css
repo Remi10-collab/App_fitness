@@ -1137,3 +1137,44 @@ body[data-theme="galaxy"] .online-program-status{
     width:100% !important;
   }
 }
+
+/* Étape 133 — bouton d'effacement rapide des champs autocomplete */
+.autocomplete-clearable{
+  position:relative;
+}
+.autocomplete-clearable > input{
+  padding-right:44px !important;
+}
+.app .autocomplete-clear-btn,
+body[data-theme="light"] .app .autocomplete-clear-btn,
+body[data-theme="galaxy"] .app .autocomplete-clear-btn{
+  position:absolute !important;
+  z-index:4 !important;
+  top:50% !important;
+  right:8px !important;
+  transform:translateY(-50%) !important;
+  width:30px !important;
+  min-width:30px !important;
+  height:30px !important;
+  min-height:30px !important;
+  margin:0 !important;
+  padding:0 !important;
+  display:grid !important;
+  place-items:center !important;
+  border-radius:50% !important;
+  border:1px solid rgba(100,116,139,.24) !important;
+  background:rgba(226,232,240,.82) !important;
+  color:#52647c !important;
+  box-shadow:none !important;
+  font-size:20px !important;
+  line-height:1 !important;
+  font-weight:400 !important;
+}
+body[data-theme="galaxy"] .app .autocomplete-clear-btn{
+  background:rgba(30,41,59,.88) !important;
+  border-color:rgba(148,163,184,.25) !important;
+  color:#d9e7f7 !important;
+}
+.app .autocomplete-clear-btn:hover{
+  filter:brightness(.97);
+}

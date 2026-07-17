@@ -51,7 +51,7 @@ const defaultExercises = [
 
 const defaultFoods = [
 {name:"Petit Yoplait",kcal:87,prot:9,gluc:4,lip:3.8},
-{name:"Œufs",kcal:65,prot:5.54,gluc:0.34,lip:4.4},
+{name:"Œufs",kcal:65,prot:5.54,gluc:0.34,lip:4.4,unit:"piece"},
 {name:"Patates",kcal:81,prot:1.8,gluc:17,lip:0.5},
 {name:"Pates",kcal:359,prot:12.5,gluc:71.2,lip:2},
 {name:"Riz",kcal:352,prot:7.5,gluc:78,lip:0.6},
@@ -223,6 +223,21 @@ function normalizeState(data){
   if(!Array.isArray(merged.exercises)) merged.exercises = defaultExercises.slice();
   if(!Array.isArray(merged.foods)) merged.foods = defaultFoods.slice();
   merged.programs = Array.isArray(merged.programs) ? merged.programs.map(normalizeProgramDefinition).filter(Boolean) : [];
+
+  const eggNames = ["oeuf", "oeufs", "œuf", "œufs"];
+  const eggFood = merged.foods.find(food => eggNames.includes(String(food?.name || "").trim().toLowerCase()));
+  if(eggFood){
+    eggFood.unit = "piece";
+    merged.meals.forEach(meal => {
+      if(!eggNames.includes(String(meal?.aliment || "").trim().toLowerCase())) return;
+      const quantity = Number(meal.qte) || 0;
+      meal.unit = "piece";
+      meal.kcal = +(Number(eggFood.kcal || 0) * quantity).toFixed(1);
+      meal.prot = +(Number(eggFood.prot || 0) * quantity).toFixed(1);
+      meal.gluc = +(Number(eggFood.gluc || 0) * quantity).toFixed(1);
+      meal.lip = +(Number(eggFood.lip || 0) * quantity).toFixed(1);
+    });
+  }
   return merged;
 }
 
@@ -1213,7 +1228,7 @@ function trainingFreeHtml(){
   return `<div class="card"><h2>Ajouter une série</h2>
     <div class="train-top-row">
       <div class="train-field train-field-date">
-        <label>Date</label><input id="trDate" type="date" value="${today()}" max="${today()}">
+        <label>Date</label><input id="trDate" type="date" value="${today()}" max="${today()}" onchange="showLastExercise();showTodayTraining()">
       </div>
       <div class="train-field train-field-session">
         <label>Séance</label><select id="trSeance"><option value="">-- Choisir --</option>${state.muscles.map(m =>`<option>${m}</option>`).join("")}</select>
@@ -1224,13 +1239,14 @@ function trainingFreeHtml(){
     </div>
     <label>Exercice</label>
 
-	<div class="autocomplete">
+	<div class="autocomplete autocomplete-clearable">
 	  <input
 		id="trExercice"
 		placeholder="Tape au moins 2 lettres..."
 		oninput="filterExercises()"
 		autocomplete="off"
 	  >
+      <button type="button" class="autocomplete-clear-btn" aria-label="Effacer l’exercice sélectionné" title="Effacer l’exercice" onclick="clearExerciseSelection()">×</button>
 	  <div id="exerciseSuggestions" class="suggestions"></div>
 	</div>
     <div class="grid3">
@@ -1507,11 +1523,22 @@ function addTraining(){
 }
 function showLastExercise(){
   const ex = val("trExercice");
-  const rows = state.trainings.filter(t=>t.exercice===ex).sort((a,b)=>b.date.localeCompare(a.date));
+  const selectedDate = val("trDate") || today();
   const box = document.getElementById("lastExercise");
-  if(!rows.length){ box.innerHTML = `<p class="small">Aucun historique.</p>`; return; }
+  if(!box) return;
+  if(!ex){ box.innerHTML = `<p class="small">Sélectionne un exercice.</p>`; return; }
+
+  // La séance en cours est volontairement exclue : ce bloc doit toujours
+  // montrer la dernière séance antérieure complète, même après la première série du jour.
+  const rows = state.trainings
+    .filter(t => t.exercice === ex && t.date < selectedDate)
+    .sort((a,b) => b.date.localeCompare(a.date) || Number(a.serie || 0) - Number(b.serie || 0));
+
+  if(!rows.length){ box.innerHTML = `<p class="small">Aucun historique précédent.</p>`; return; }
   const lastDate = rows[0].date;
-  const same = rows.filter(t=>t.date===lastDate);
+  const same = rows
+    .filter(t => t.date === lastDate)
+    .sort((a,b) => Number(a.serie || 0) - Number(b.serie || 0));
   box.innerHTML = `<div class="pill">${fmt(lastDate)}</div>` + same.map(t=>row(`Série ${t.serie}`, `${t.poids} kg x ${t.repetitions}`)).join("");
 }
 function showTodayTraining(){
@@ -1601,6 +1628,35 @@ function addProgramTraining(exerciseId){
   render();
 }
 
+function isPieceFood(foodOrName){
+  const food = typeof foodOrName === "object" && foodOrName ? foodOrName : null;
+  const name = food ? food.name : foodOrName;
+  return food?.unit === "piece" || ["oeuf", "oeufs", "œuf", "œufs"].includes(normalizeText(name));
+}
+
+function foodQuantityFactor(food, quantity){
+  const q = Number(quantity) || 0;
+  return isPieceFood(food) ? q : q / 100;
+}
+
+function foodQuantityText(foodOrName, quantity){
+  const q = Number(quantity) || 0;
+  if(isPieceFood(foodOrName)) return `${q} œuf${q > 1 ? "s" : ""}`;
+  return `${q} g`;
+}
+
+function updateMealQuantityUi(foodOrName){
+  const label = document.getElementById("mealQteLabel");
+  const input = document.getElementById("mealQte");
+  const piece = isPieceFood(foodOrName);
+  if(label) label.textContent = piece ? "Nombre d’œufs" : "Quantité en g";
+  if(input){
+    input.placeholder = piece ? "ex : 3" : "ex : 240";
+    input.step = piece ? "1" : "any";
+    input.inputMode = piece ? "numeric" : "decimal";
+  }
+}
+
 function mealRepasOptions(selected){
   return ["PETIT DEJ", "MIDI", "COLLATION", "SOIR"]
     .map(name => `<option ${name === selected ? "selected" : ""}>${name}</option>`)
@@ -1616,7 +1672,7 @@ function mealsHtml(){
     const items = Array.isArray(favorite.items) ? favorite.items : [];
     const preview = items
       .slice(0, 3)
-      .map(item => `${escapeHtml(item.aliment)} ${Number(item.qte) || 0} g`)
+      .map(item => `${escapeHtml(item.aliment)} ${escapeHtml(foodQuantityText(item.aliment, item.qte))}`)
       .join(" · ");
     const more = items.length > 3 ? ` · +${items.length - 3}` : "";
 
@@ -1649,18 +1705,19 @@ function mealsHtml(){
     </div>
 
     <label>Aliment</label>
-    <div class="autocomplete">
+    <div class="autocomplete autocomplete-clearable">
       <input
         id="mealFood"
         placeholder="Tape au moins 2 lettres..."
         oninput="filterFoods()"
         autocomplete="off"
       >
+      <button type="button" class="autocomplete-clear-btn" aria-label="Effacer l’aliment sélectionné" title="Effacer l’aliment" onclick="clearFoodSelection()">×</button>
       <div id="foodSuggestions" class="suggestions"></div>
     </div>
 
-    <label>Quantité en g</label>
-    <input id="mealQte" inputmode="decimal" placeholder="ex: 240">
+    <label id="mealQteLabel">Quantité en g</label>
+    <input id="mealQte" inputmode="decimal" placeholder="ex : 240">
 
     <button onclick="addMeal()">Ajouter l'aliment</button>
   </div>
@@ -1721,9 +1778,9 @@ function addMeal(){
   const q = Number(val("mealQte").replace(",","."));
   if(!food || !q) return alert("Choisis un aliment et une quantité.");
   if(!checkNotFutureDate(val("mealDate"))) return;
-  const factor = q/100;
+  const factor = foodQuantityFactor(food, q);
   const item = {
-    id:uid(), date:val("mealDate"), repas:val("mealRepas"), aliment:food.name, qte:q,
+    id:uid(), date:val("mealDate"), repas:val("mealRepas"), aliment:food.name, qte:q, unit:isPieceFood(food) ? "piece" : "g",
     kcal:+(food.kcal*factor).toFixed(1), prot:+(food.prot*factor).toFixed(1),
     gluc:+(food.gluc*factor).toFixed(1), lip:+(food.lip*factor).toFixed(1),
     semaine:weekNumber(val("mealDate")), mois:monthName(val("mealDate"))
@@ -2003,13 +2060,14 @@ function applyFavoriteMeal(favoriteId){
       return;
     }
 
-    const factor = q / 100;
+    const factor = foodQuantityFactor(food, q);
     added.push({
       id:uid(),
       date:mealFormDate,
       repas:mealFormRepas,
       aliment:food.name,
       qte:q,
+      unit:isPieceFood(food) ? "piece" : "g",
       kcal:+(food.kcal*factor).toFixed(1),
       prot:+(food.prot*factor).toFixed(1),
       gluc:+(food.gluc*factor).toFixed(1),
@@ -2132,7 +2190,7 @@ function renderMealDataRow(meal){
     <div class="row meal-data-row ${mealBulkMode ? "bulk-mode" : ""} ${selected ? "is-selected" : ""}" ${selectableAttrs}>
       <div class="meal-data-main">
         <div>${escapeHtml(meal.aliment)}</div>
-        <strong>${escapeHtml(meal.qte)}g · ${escapeHtml(meal.kcal)} kcal</strong>
+        <strong>${escapeHtml(foodQuantityText(meal.unit === "piece" ? "Œufs" : meal.aliment, meal.qte))} · ${escapeHtml(meal.kcal)} kcal</strong>
       </div>
 
       ${mealBulkMode ? `
@@ -2721,7 +2779,7 @@ function dataMealsHtml(){
   const kcal=sum(rows,"kcal"), prot=sum(rows,"prot"), gluc=sum(rows,"gluc"), lip=sum(rows,"lip");
   return `<div class="card data-history-card"><div class="data-section-head"><div><span class="data-kicker">Historique ciblé</span><h2>Repas</h2></div></div>${dataDateBar("meals",dataMealsDate)}
     ${rows.length?`<div class="data-day-summary nutrition"><span>${Math.round(kcal)} kcal</span><span>${Math.round(prot)} g prot.</span><span>${Math.round(gluc)} g gluc.</span><span>${Math.round(lip)} g lip.</span></div>
-    <div class="data-meal-list">${groups.map(g=>`<section class="data-meal-block"><h3>${escapeHtml(g.name)}</h3>${g.rows.map(x=>`<div class="data-meal-row"><div><strong>${escapeHtml(x.aliment)}</strong><small>${escapeHtml(x.qte)} g</small></div><span>${Math.round(Number(x.kcal)||0)} kcal</span><button class="icon-btn delete" onclick="deleteItem('meals','${x.id}')">×</button></div>`).join("")}</section>`).join("")}</div>`:`<p class="data-empty">Aucun repas enregistré à cette date.</p>`}
+    <div class="data-meal-list">${groups.map(g=>`<section class="data-meal-block"><h3>${escapeHtml(g.name)}</h3>${g.rows.map(x=>`<div class="data-meal-row"><div><strong>${escapeHtml(x.aliment)}</strong><small>${escapeHtml(foodQuantityText(x.unit === "piece" ? "Œufs" : x.aliment, x.qte))}</small></div><span>${Math.round(Number(x.kcal)||0)} kcal</span><button class="icon-btn delete" onclick="deleteItem('meals','${x.id}')">×</button></div>`).join("")}</section>`).join("")}</div>`:`<p class="data-empty">Aucun repas enregistré à cette date.</p>`}
   </div>`;
 }
 
@@ -3325,7 +3383,7 @@ function afterRender(){
   enhanceIOSDateInputs();
   enableDatePickerFullClick();
   if(current==="training"){ if(trainingMode === "free") showLastExercise(); showTodayTraining(); if(trainingMode === "program" && onlineProgramCatalogStatus === "idle") setTimeout(() => loadOnlineProgramCatalog(), 0); }
-  if(current==="meals"){ showTodayMeals(); }
+  if(current==="meals"){ showTodayMeals(); updateMealQuantityUi(val("mealFood")); }
   if(current==="data" && dataView==="library"){ currentDataTable = null; setDataTableButtons(null); }
   if(current==="weight"){ drawWeightChart(); }
 }
@@ -4247,7 +4305,8 @@ function recalcMeal(item){
     return;
   }
 
-  const factor = item.qte / 100;
+  const factor = foodQuantityFactor(food, item.qte);
+  item.unit = isPieceFood(food) ? "piece" : "g";
   item.kcal = +(food.kcal * factor).toFixed(1);
   item.prot = +(food.prot * factor).toFixed(1);
   item.gluc = +(food.gluc * factor).toFixed(1);
@@ -4258,6 +4317,32 @@ function recalcMeal(item){
 
 function val(id){ return document.getElementById(id)?.value || ""; }
 function num(id){ return Number(val(id).replace(",",".")) || 0; }
+
+function clearFoodSelection(){
+  const input = document.getElementById("mealFood");
+  const suggestions = document.getElementById("foodSuggestions");
+  const quantity = document.getElementById("mealQte");
+  if(input) input.value = "";
+  if(quantity) quantity.value = "";
+  updateMealQuantityUi("");
+  if(suggestions){ suggestions.innerHTML = ""; suggestions.style.display = "none"; }
+  input?.focus();
+}
+
+function clearExerciseSelection(){
+  const input = document.getElementById("trExercice");
+  const suggestions = document.getElementById("exerciseSuggestions");
+  const serie = document.getElementById("trSerie");
+  const weight = document.getElementById("trPoids");
+  const reps = document.getElementById("trReps");
+  if(input) input.value = "";
+  if(serie) serie.value = "1";
+  if(weight) weight.value = "";
+  if(reps) reps.value = "";
+  if(suggestions){ suggestions.innerHTML = ""; suggestions.style.display = "none"; }
+  showLastExercise();
+  input?.focus();
+}
 
 function filterFoods(){
   const input = document.getElementById("mealFood");
@@ -4339,7 +4424,7 @@ function selectExercise(name){
 function registerFitnessServiceWorker(){
   if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=132").catch(error => {
+    navigator.serviceWorker.register("./service-worker.js?v=134").catch(error => {
       console.warn("Service worker non enregistré", error);
     });
   }, {once:true});
