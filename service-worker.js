@@ -1,11 +1,11 @@
-const CACHE_VERSION = "fitness-v134";
+const CACHE_VERSION = "fitness-v135";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=134",
-  "./app-fixes.css?v=134",
-  "./app.js?v=134",
-  "./manifest.json?v=134",
+  "./style.css?v=135",
+  "./app-fixes.css?v=135",
+  "./app.js?v=135",
+  "./manifest.json?v=135",
   "./assets/session_light_dos.webp",
   "./assets/session_light_pecs_epaules.webp",
   "./assets/session_light_jambes.webp",
