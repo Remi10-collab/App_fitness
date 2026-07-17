@@ -4436,7 +4436,7 @@ function selectExercise(name){
 function registerFitnessServiceWorker(){
   if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=136").catch(error => {
+    navigator.serviceWorker.register("./service-worker.js?v=137").catch(error => {
       console.warn("Service worker non enregistré", error);
     });
   }, {once:true});

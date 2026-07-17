@@ -1192,3 +1192,58 @@ body[data-theme="galaxy"] .app .autocomplete-clear-btn{color:#c6d4e5 !important}
 .profile-collapsed-summary{margin-top:14px}
 .profile-personal-card.is-open .profile-form{margin-top:16px;padding-top:14px;border-top:1px solid rgba(148,163,184,.18)}
 body[data-theme="light"] .profile-personal-card.is-open .profile-form{border-top-color:#dbe4ee}
+
+/* Étape 137 — croix d'effacement sans pastille */
+body[data-theme="light"] .app button.autocomplete-clear-btn,
+body[data-theme="galaxy"] .app button.autocomplete-clear-btn,
+.app button.autocomplete-clear-btn{
+  position:absolute !important;
+  top:50% !important;
+  right:12px !important;
+  transform:translateY(-50%) !important;
+  width:24px !important;
+  min-width:24px !important;
+  max-width:24px !important;
+  height:24px !important;
+  min-height:24px !important;
+  max-height:24px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  background-color:transparent !important;
+  background-image:none !important;
+  box-shadow:none !important;
+  text-shadow:none !important;
+  color:#6b7d92 !important;
+  font-size:25px !important;
+  font-weight:300 !important;
+  line-height:22px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  appearance:none !important;
+  -webkit-appearance:none !important;
+  filter:none !important;
+}
+body[data-theme="galaxy"] .app button.autocomplete-clear-btn{
+  color:#c9d6e7 !important;
+}
+body[data-theme="light"] .app button.autocomplete-clear-btn:hover,
+body[data-theme="galaxy"] .app button.autocomplete-clear-btn:hover,
+.app button.autocomplete-clear-btn:hover,
+body[data-theme="light"] .app button.autocomplete-clear-btn:active,
+body[data-theme="galaxy"] .app button.autocomplete-clear-btn:active,
+.app button.autocomplete-clear-btn:active{
+  background:transparent !important;
+  background-color:transparent !important;
+  background-image:none !important;
+  box-shadow:none !important;
+  transform:translateY(-50%) !important;
+}
+body[data-theme="light"] .app button.autocomplete-clear-btn[hidden],
+body[data-theme="galaxy"] .app button.autocomplete-clear-btn[hidden],
+.app button.autocomplete-clear-btn[hidden]{
+  display:none !important;
+}

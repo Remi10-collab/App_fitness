@@ -1,0 +1,7 @@
+Étape 137 — correction visuelle des croix
+
+- Suppression forcée du fond bleu des croix Exercice et Aliment.
+- Suppression de la forme circulaire et de la bordure.
+- Croix réduite à une icône simple et transparente.
+- La croix reste masquée tant que le champ est vide.
+- Cache PWA / GitHub Pages mis à jour en version 137.
