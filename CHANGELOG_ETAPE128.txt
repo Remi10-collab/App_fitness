@@ -1,0 +1,8 @@
+Étape 128 — correction forte du visuel Programme
+
+- Correction des cartes d’exercices du mode Programme en thème clair : fin du texte noir sur fond bleu foncé.
+- Les en-têtes d’exercices passent sur un fond clair, plus cohérent avec le reste de l’interface.
+- Réduction de la taille des boutons Séance libre / Programme et Valider la série.
+- Réduction du padding global des blocs Programme.
+- Champ Date mieux aligné et mieux calé dans la grille de sélection.
+- Cache PWA / GitHub Pages mis à jour en version 128.

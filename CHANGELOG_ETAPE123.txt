@@ -1,0 +1,9 @@
+ÉTAPE 123 — FORMAT DES SÉRIES ET ÉDITION
+
+- Affichage : S1 : 75 kg x 10 reps.
+- Seul le numéro de série est en gras.
+- Maximum 3 séries par ligne, séparées par |.
+- Crayon de modification dans Dernière séance, Séance du jour et Data > Entraînements.
+- Fenêtre d’édition complète : date, séance, type, exercice, série, poids et répétitions.
+- Recalcul automatique du volume, de la semaine et du mois après modification.
+- Cache PWA incrémenté en version 123.

@@ -1,0 +1,9 @@
+Étape 133 — changement rapide exercice/aliment et historique précédent
+
+- Ajout d’un bouton × dans la sélection d’exercice pour vider instantanément le champ.
+- Le bouton remet également la série à 1 et vide poids/répétitions pour commencer un nouvel exercice.
+- Ajout du même bouton × dans la sélection d’aliment ; il vide aussi la quantité.
+- « Dernière fois sur cet exercice » exclut maintenant la date de la séance en cours.
+- Après l’ajout de la première série du jour, toutes les séries de la séance précédente restent visibles.
+- Le changement de date actualise immédiatement l’historique précédent et la séance affichée.
+- Cache PWA / GitHub Pages mis à jour en version 133.

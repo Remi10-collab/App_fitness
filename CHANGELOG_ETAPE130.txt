@@ -1,0 +1,12 @@
+Étape 130 — Programme Ayoub
+
+- Suppression du Programme Test.
+- Ajout du Programme Ayoub comme programme intégré par défaut.
+- Ajout de 4 séances :
+  1. Pecs + Epaules + triceps
+  2. Quads + Mollets + Abdos
+  3. Dos + biceps + Epaules
+  4. Ischios + mollets
+- Intégration de tous les exercices et nombres de séries demandés.
+- Les séries validées depuis ce programme continuent de s’enregistrer dans l’historique normal.
+- Cache PWA / GitHub Pages mis à jour en version 130.

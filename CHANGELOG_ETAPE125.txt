@@ -1,0 +1,7 @@
+APP FITNESS — ÉTAPE 125
+
+- Data > Entraînements : tous les exercices sont désormais repliés à l’ouverture de la vue.
+- Aucun exercice n’est détaillé automatiquement.
+- Le clic sur un exercice l’ouvre et referme les autres.
+- Le clic sur l’exercice déjà ouvert le referme.
+- Cache PWA/GitHub Pages actualisé en version 125.

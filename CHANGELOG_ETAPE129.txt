@@ -1,0 +1,8 @@
+Étape 129 — correction définitive du mode Programme
+
+- Suppression réelle du fond bleu foncé sur les cartes d’exercices du mode Programme en thème clair.
+- Les en-têtes d’exercices ne sont plus rendus comme des boutons bleus : ils passent sur un fond clair.
+- Réduction supplémentaire des boutons de mode et du bouton Valider la série.
+- Champ Date élargi et réorganisé pour éviter la coupure de l’année sur mobile.
+- La grille Date / Programme / Séance bascule plus tôt pour laisser toute la largeur nécessaire à la date.
+- Cache PWA / GitHub Pages mis à jour en version 129.

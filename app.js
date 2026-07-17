@@ -2885,6 +2885,1419 @@ function profileHtml(){
 
   ${themePickerHtml()}`;
 }
+function settingsHtml(){
+  return `
+  <div class="card"><h2>Code de verrouillage</h2>
+    <p class="small">Le code protège l'ouverture sur ton téléphone. Il reste local.</p>
+    <input id="pinNew" type="password" inputmode="numeric" placeholder="Nouveau code, ou vide pour supprimer">
+    <button onclick="savePin()">Enregistrer le code</button>
+  </div>
+  <div class="card"><h2>Sauvegarde</h2>
+    <button class="green" onclick="exportData()">Exporter mes données</button>
+    <p class="small">Les programmes sont importés et exportés séparément dans Train → Programme.</p>
+	<label>Importer les données générales</label><input type="file"id="fileImport"accept=".json"><button onclick="importFile()">Importer fichier JSON</button>
+    <button class="danger" onclick="resetData()">Tout supprimer</button>
+  </div>
+  <div class="card"><h2>Listes disponibles</h2>
+    <p class="small">Affiche les exercices ou les aliments enregistrés. Une seule liste s'affiche à la fois.</p>
+    <div class="grid2 data-switch">
+      <button id="btnDataExercises" class="secondary" onclick="showDataTable('exercises')">Exercices</button>
+      <button id="btnDataFoods" class="secondary" onclick="showDataTable('foods')">Aliments</button>
+    </div>
+    <div id="dataTableBox" class="data-table-box"></div>
+  </div>`;
+}
+function escapeHtml(v){
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+function encodeData(v){ return encodeURIComponent(String(v ?? "")); }
+
+let currentDataTable = null;
+
+function setDataTableButtons(activeType){
+  const btnExercises = document.getElementById("btnDataExercises");
+  const btnFoods = document.getElementById("btnDataFoods");
+
+  if(btnExercises){
+    btnExercises.className = activeType === "exercises" ? "green" : "secondary";
+  }
+  if(btnFoods){
+    btnFoods.className = activeType === "foods" ? "green" : "secondary";
+  }
+}
+
+function showDataTable(type){
+  const box = document.getElementById("dataTableBox");
+  if(!box) return;
+
+  if(currentDataTable === type){
+    currentDataTable = null;
+    box.innerHTML = "";
+    setDataTableButtons(null);
+    return;
+  }
+
+  currentDataTable = type;
+  setDataTableButtons(type);
+
+  if(type === "exercises"){
+    const rows = state.exercises
+      .slice()
+      .sort((a,b) => a.localeCompare(b, "fr"));
+
+    box.innerHTML = `
+      <h3>Exercices disponibles (${rows.length})</h3>
+      <div class="table-head data-exercise-head"><div>#</div><div>Exercice</div><div>Action</div></div>
+      ${rows.map((e,i) => `
+        <div class="table-row data-exercise-row">
+          <div>${i + 1}</div>
+          <div>${escapeHtml(e)}</div>
+          <div><button class="icon-btn delete" data-value="${encodeData(e)}" onclick="deleteListItem('exercises', decodeURIComponent(this.dataset.value))" aria-label="Supprimer" title="Supprimer">×</button></div>
+        </div>
+      `).join("") || `<p class="small">Aucun exercice.</p>`}
+    `;
+    return;
+  }
+
+  if(type === "foods"){
+    const rows = state.foods
+      .slice()
+      .sort((a,b) => a.name.localeCompare(b.name, "fr"));
+
+    box.innerHTML = `
+      <h3>Aliments disponibles (${rows.length})</h3>
+      <div class="table-head data-food-head"><div>Aliment</div><div>Kcal</div><div>Prot</div><div>Gluc</div><div>Lip</div><div>Action</div></div>
+      ${rows.map(f => `
+        <div class="table-row data-food-row">
+          <div>${escapeHtml(f.name)}</div>
+          <div>${escapeHtml(f.kcal)}</div>
+          <div>${escapeHtml(f.prot)}</div>
+          <div>${escapeHtml(f.gluc)}</div>
+          <div>${escapeHtml(f.lip)}</div>
+          <div><button class="icon-btn delete" data-value="${encodeData(f.name)}" onclick="deleteListItem('foods', decodeURIComponent(this.dataset.value))" aria-label="Supprimer" title="Supprimer">×</button></div>
+        </div>
+      `).join("") || `<p class="small">Aucun aliment.</p>`}
+    `;
+  }
+}
+
+function deleteListItem(type, name){
+  const cleanName = String(name || "").trim();
+  if(!cleanName) return;
+
+  if(type === "exercises"){
+    const used = state.trainings.some(t => normalizeText(t.exercice) === normalizeText(cleanName));
+    const msg = used
+      ? `Cet exercice est utilisé dans ton historique. Le supprimer de la liste ne supprime pas tes anciennes séries. Continuer ?`
+      : `Supprimer l'exercice "${cleanName}" ?`;
+    if(!confirm(msg)) return;
+    state.exercises = state.exercises.filter(e => normalizeText(e) !== normalizeText(cleanName));
+  }
+
+  if(type === "foods"){
+    const used = state.meals.some(m => normalizeText(m.aliment) === normalizeText(cleanName));
+    const msg = used
+      ? `Cet aliment est utilisé dans ton historique. Le supprimer de la liste ne supprime pas tes anciens repas. Continuer ?`
+      : `Supprimer l'aliment "${cleanName}" ?`;
+    if(!confirm(msg)) return;
+    state.foods = state.foods.filter(f => normalizeText(f.name) !== normalizeText(cleanName));
+  }
+
+  save();
+  showDataTable(type);
+}
+
+function savePin(){
+  const p=val("pinNew");
+  if(p){ localStorage.setItem(PIN_KEY,p); alert("Code enregistré."); }
+  else { localStorage.removeItem(PIN_KEY); alert("Code supprimé."); }
+}
+function exportData(){
+  const generalData = Object.assign({}, state);
+  delete generalData.programs;
+  const text = JSON.stringify(generalData,null,2);
+  navigator.clipboard?.writeText(text);
+  const blob = new Blob([text],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download="suivi-fitness-"+today()+".json"; a.click();
+  URL.revokeObjectURL(url);
+}
+function importFile(){
+  const input = document.getElementById("fileImport");
+  const file = input?.files?.[0];
+
+  if(!file){
+    alert("Choisis un fichier JSON");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function(e){
+    try{
+      const parsedRaw = JSON.parse(e.target.result);
+      if(!parsedRaw || typeof parsedRaw !== "object" || Array.isArray(parsedRaw)){
+        throw new Error("Format de sauvegarde invalide");
+      }
+      if(parsedRaw.kind === "fitness-program"){
+        alert("Ce fichier est un programme. Importe-le depuis Train → Programme.");
+        return;
+      }
+
+      const parsed = normalizeState(parsedRaw);
+      const before = {
+        weights: state.weights.length,
+        trainings: state.trainings.length,
+        meals: state.meals.length,
+        favoriteMeals: (state.favoriteMeals || []).length,
+        muscles: state.muscles.length,
+        exercises: state.exercises.length,
+        foods: state.foods.length
+      };
+
+      parsed.weights.forEach(w => {
+        if(w && w.date && Number.isFinite(normalizeNum(w.poids)) && !state.weights.some(x => sameWeight(x, w))){
+          state.weights.push(Object.assign({}, w, {id:w.id || uid(), poids:normalizeNum(w.poids)}));
+        }
+      });
+
+      parsed.trainings.forEach(t => {
+        if(t && t.date && t.exercice && !state.trainings.some(x => sameTraining(x, t))){
+          state.trainings.push(Object.assign({}, t, {id:t.id || uid()}));
+        }
+      });
+
+      parsed.meals.forEach(m => {
+        if(m && m.date && m.aliment && !state.meals.some(x => sameMeal(x, m))){
+          state.meals.push(Object.assign({}, m, {id:m.id || uid()}));
+        }
+      });
+
+      parsed.favoriteMeals.forEach(favorite => {
+        const valid = favorite && favorite.name && Array.isArray(favorite.items);
+        const exists = (state.favoriteMeals || []).some(x =>
+          (favorite.id && x.id === favorite.id) ||
+          (normalizeText(x.name) === normalizeText(favorite.name) && favoriteSignature(x.items) === favoriteSignature(favorite.items))
+        );
+        if(valid && !exists){
+          state.favoriteMeals.push({
+            id: favorite.id || uid(),
+            name: String(favorite.name).trim(),
+            repas: favorite.repas || "PETIT DEJ",
+            createdAt: favorite.createdAt || new Date().toISOString(),
+            items: favorite.items
+              .map(item => ({aliment:String(item.aliment || "").trim(), qte:normalizeNum(item.qte)}))
+              .filter(item => item.aliment && item.qte > 0)
+          });
+        }
+      });
+
+      parsed.muscles.forEach(muscle => {
+        const clean = String(muscle || "").trim();
+        if(clean && !state.muscles.some(x => normalizeText(x) === normalizeText(clean))){
+          state.muscles.push(clean);
+        }
+      });
+      parsed.exercises.forEach(ex => addUniqueExercise(ex));
+      parsed.foods.forEach(f => addUniqueFood(f));
+
+      // La sauvegarde est maintenant réellement complète : profil, objectifs et thème sont restaurés.
+      state.profile = Object.assign(defaultProfile(), parsed.profile || {});
+      state.settings = Object.assign(defaultSettings(), parsed.settings || {});
+      const importedTheme = ["galaxy", "light"].includes(parsedRaw.theme || state.settings.theme)
+        ? (parsedRaw.theme || state.settings.theme)
+        : currentTheme();
+      state.theme = importedTheme;
+      state.settings.theme = importedTheme;
+
+      state = normalizeState(state);
+      save();
+      applyTheme();
+
+      const added = {
+        weights: state.weights.length - before.weights,
+        trainings: state.trainings.length - before.trainings,
+        meals: state.meals.length - before.meals,
+        favoriteMeals: (state.favoriteMeals || []).length - before.favoriteMeals,
+        muscles: state.muscles.length - before.muscles,
+        exercises: state.exercises.length - before.exercises,
+        foods: state.foods.length - before.foods
+      };
+
+      alert(`Import réussi. Profil et réglages restaurés. Ajoutés : ${added.trainings} entraînements, ${added.meals} repas, ${added.favoriteMeals} favoris, ${added.weights} poids, ${added.exercises} exercices, ${added.foods} aliments.`);
+      render();
+    }
+    catch(error){
+      console.error("Import impossible", error);
+      alert("Le fichier JSON est invalide ou incompatible.");
+    }
+    finally{
+      if(input) input.value = "";
+    }
+  };
+
+  reader.onerror = function(){
+    alert("Impossible de lire ce fichier.");
+  };
+
+  reader.readAsText(file);
+}
+
+function slugifyProgramId(value){
+  const normalized = String(value || "programme")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return normalized || `programme-${uid()}`;
+}
+
+function normalizeProgramDefinition(raw){
+  if(!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const name = String(raw.name || "").trim();
+  if(!name) return null;
+
+  const rawSessions = Array.isArray(raw.sessions) ? raw.sessions : [];
+  const sessions = rawSessions.map((session, sessionIndex) => {
+    if(!session || typeof session !== "object") return null;
+    const sessionName = String(session.name || `Séance ${sessionIndex + 1}`).trim();
+    const rawExercises = Array.isArray(session.exercises) ? session.exercises : [];
+    const exercises = rawExercises.map(exercise => {
+      if(!exercise || typeof exercise !== "object") return null;
+      const exerciseName = String(exercise.name || "").trim();
+      const sets = Math.max(1, Math.min(50, Math.round(Number(exercise.sets) || 0)));
+      const repMin = Math.max(1, Math.min(1000, Math.round(Number(exercise.repMin) || 1)));
+      const repMax = Math.max(repMin, Math.min(1000, Math.round(Number(exercise.repMax) || repMin)));
+      if(!exerciseName || !sets) return null;
+      return {name:exerciseName, sets, repMin, repMax};
+    }).filter(Boolean);
+    if(!sessionName || !exercises.length) return null;
+    return {
+      id: slugifyProgramId(session.id || `${sessionName}-${sessionIndex + 1}`),
+      name: sessionName,
+      exercises
+    };
+  }).filter(Boolean);
+
+  if(!sessions.length) return null;
+  return {
+    id: slugifyProgramId(raw.id || name),
+    name,
+    desc: String(raw.desc ?? raw.description ?? "").trim(),
+    version: Math.max(1, Math.round(Number(raw.version) || 1)),
+    level: String(raw.level || "").trim(),
+    daysPerWeek: Math.max(0, Math.round(Number(raw.daysPerWeek) || 0)),
+    sessions
+  };
+}
+
+function programFilePayload(program){
+  return {
+    kind:"fitness-program",
+    schemaVersion:1,
+    program
+  };
+}
+
+function importProgramFile(){
+  const input = document.getElementById("programFileImport");
+  const file = input?.files?.[0];
+  if(!file){
+    alert("Choisis un fichier programme JSON.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = event => {
+    try{
+      const parsed = JSON.parse(event.target.result);
+      if(!parsed || parsed.kind !== "fitness-program" || Number(parsed.schemaVersion) !== 1){
+        throw new Error("Ce fichier n'est pas un programme compatible.");
+      }
+      const program = normalizeProgramDefinition(parsed.program);
+      if(!program) throw new Error("Le programme ne contient aucune séance valide.");
+
+      state.programs = getPrograms().slice();
+      const existingIndex = state.programs.findIndex(item =>
+        item.id === program.id || normalizeText(item.name) === normalizeText(program.name)
+      );
+
+      if(existingIndex >= 0){
+        const replace = confirm(`Le programme « ${program.name} » existe déjà. Le remplacer ?`);
+        if(!replace) return;
+        state.programs.splice(existingIndex, 1, program);
+      }else{
+        state.programs.push(program);
+      }
+
+      selectedProgramId = program.id;
+      selectedProgramSessionId = program.sessions[0]?.id || "";
+      openProgramExerciseId = null;
+      save();
+      alert(`Programme importé : ${program.name} (${program.sessions.length} séances).`);
+      render();
+    }catch(error){
+      console.error("Import programme impossible", error);
+      alert(error?.message || "Le fichier programme JSON est invalide.");
+    }finally{
+      if(input) input.value = "";
+    }
+  };
+  reader.onerror = () => alert("Impossible de lire ce fichier programme.");
+  reader.readAsText(file);
+}
+
+function exportSelectedProgram(){
+  const program = getSelectedProgram();
+  if(!program) return alert("Aucun programme à exporter.");
+  const text = JSON.stringify(programFilePayload(program), null, 2);
+  const blob = new Blob([text], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${slugifyProgramId(program.name)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function deleteSelectedProgram(){
+  const program = getSelectedProgram();
+  if(!program) return;
+  if(!confirm(`Supprimer le programme « ${program.name} » ? Ton historique d'entraînement restera intact.`)) return;
+  state.programs = getPrograms().filter(item => item.id !== program.id);
+  const next = state.programs[0] || null;
+  selectedProgramId = next?.id || "";
+  selectedProgramSessionId = next?.sessions?.[0]?.id || "";
+  openProgramExerciseId = null;
+  save();
+  render();
+}
+
+function normalizeText(v){ return String(v || "").trim().toLowerCase(); }
+function normalizeNum(v){ return Number(String(v || 0).replace(",", ".")) || 0; }
+function sameWeight(a, b){
+  return a.id && b.id ? a.id === b.id : a.date === b.date && normalizeNum(a.poids) === normalizeNum(b.poids);
+}
+function sameTraining(a, b){
+  return a.id && b.id ? a.id === b.id :
+    a.date === b.date &&
+    normalizeText(a.seance) === normalizeText(b.seance) &&
+    normalizeText(a.type) === normalizeText(b.type) &&
+    normalizeText(a.exercice) === normalizeText(b.exercice) &&
+    normalizeNum(a.serie) === normalizeNum(b.serie) &&
+    normalizeNum(a.poids) === normalizeNum(b.poids) &&
+    normalizeNum(a.repetitions) === normalizeNum(b.repetitions);
+}
+function sameMeal(a, b){
+  return a.id && b.id ? a.id === b.id :
+    a.date === b.date &&
+    normalizeText(a.repas) === normalizeText(b.repas) &&
+    normalizeText(a.aliment) === normalizeText(b.aliment) &&
+    normalizeNum(a.qte) === normalizeNum(b.qte) &&
+    normalizeNum(a.kcal) === normalizeNum(b.kcal);
+}
+function addUniqueExercise(ex){
+  const name = String(ex || "").trim();
+  if(name && !state.exercises.some(x => normalizeText(x) === normalizeText(name))){
+    state.exercises.push(name);
+  }
+}
+function addUniqueFood(f){
+  if(!f || !f.name) return;
+  const name = String(f.name).trim();
+  if(!name) return;
+  const clean = {name, kcal:normalizeNum(f.kcal), prot:normalizeNum(f.prot), gluc:normalizeNum(f.gluc), lip:normalizeNum(f.lip)};
+  const exists = state.foods.some(x => normalizeText(x.name) === normalizeText(name));
+  if(!exists){
+    state.foods.push(clean);
+  }
+}
+
+function resetData(){
+  if(confirm("Supprimer toutes les données ?")){
+    state = normalizeState({});
+    state.theme = currentTheme();
+    state.settings = Object.assign(defaultSettings(), state.settings || {}, {theme: state.theme});
+    save(); render();
+  }
+}
+
+
+function enableDatePickerFullClick(){
+  document.querySelectorAll('input[type="date"]').forEach(input => {
+    if(input.dataset.fullDatePicker === "1") return;
+    input.dataset.fullDatePicker = "1";
+
+    input.addEventListener("click", () => {
+      if(typeof input.showPicker === "function"){
+        try{ input.showPicker(); }catch(e){}
+      }
+    });
+
+    input.addEventListener("focus", () => {
+      if(typeof input.showPicker === "function"){
+        try{ input.showPicker(); }catch(e){}
+      }
+    });
+  });
+}
+
+function enhanceIOSDateInputs(){
+  const isCompact = window.matchMedia && window.matchMedia("(max-width: 520px)").matches;
+  const isWebKitTouch = window.CSS && CSS.supports && CSS.supports("-webkit-touch-callout", "none");
+  if(!isCompact || !isWebKitTouch) return;
+
+  document.querySelectorAll('input[type="date"]').forEach(input => {
+    if(input.closest(".ios-date-shell")) return;
+
+    const shell = document.createElement("div");
+    shell.className = "ios-date-shell";
+
+    const display = document.createElement("span");
+    display.className = "ios-date-display";
+
+    const updateDisplay = () => {
+      display.textContent = input.value ? fmt(input.value) : "Choisir une date";
+      display.classList.toggle("is-empty", !input.value);
+    };
+
+    input.parentNode.insertBefore(shell, input);
+    shell.appendChild(display);
+    shell.appendChild(input);
+
+    input.classList.add("ios-date-native");
+    input.addEventListener("input", updateDisplay);
+    input.addEventListener("change", updateDisplay);
+    updateDisplay();
+  });
+}
+
+function afterRender(){
+  enhanceIOSDateInputs();
+  enableDatePickerFullClick();
+  if(current==="training"){ if(trainingMode === "free") showLastExercise(); showTodayTraining(); if(trainingMode === "program" && onlineProgramCatalogStatus === "idle") setTimeout(() => loadOnlineProgramCatalog(), 0); }
+  if(current==="meals"){ showTodayMeals(); updateMealQuantityUi(val("mealFood")); }
+  if(current==="data" && dataView==="library"){ currentDataTable = null; setDataTableButtons(null); }
+  if(current==="weight"){ drawWeightChart(); }
+}
+function loadD3(){
+  if(window.d3) return Promise.resolve(window.d3);
+  if(d3Promise) return d3Promise;
+
+  d3Promise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-d3="true"]');
+    if(existing){
+      existing.addEventListener("load", () => window.d3 ? resolve(window.d3) : reject(new Error("D3 indisponible")), {once:true});
+      existing.addEventListener("error", () => reject(new Error("D3 indisponible")), {once:true});
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js";
+    script.async = true;
+    script.dataset.d3 = "true";
+    script.crossOrigin = "anonymous";
+    script.onload = () => window.d3 ? resolve(window.d3) : reject(new Error("D3 indisponible"));
+    script.onerror = () => reject(new Error("Mode hors ligne"));
+    document.head.appendChild(script);
+  });
+
+  return d3Promise;
+}
+
+function clearWeightD3Chart(){
+  if(weightD3ResizeObserver){
+    weightD3ResizeObserver.disconnect();
+    weightD3ResizeObserver = null;
+  }
+
+  const el = document.getElementById("weightD3Chart");
+  if(el) el.innerHTML = "";
+}
+
+function formatDateShort(iso){
+  if(!iso) return "";
+  const parts = String(iso).split("-");
+  if(parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}`;
+}
+
+function chartRowsForWeight(){
+  return filterRowsByRange(
+    state.weights
+      .slice()
+      .sort((a,b) => a.date.localeCompare(b.date))
+  );
+}
+
+function renderWeightChartFallback(message){
+  const el = document.getElementById("weightD3Chart");
+  if(!el) return;
+
+  el.innerHTML = `
+    <div class="chart-fallback">
+      <strong>Graphique indisponible</strong>
+      <span>${escapeHtml(message)}</span>
+    </div>
+  `;
+}
+
+function renderNativeWeightChart(rows, notice="Mode hors ligne · graphique simplifié"){
+  const el = document.getElementById("weightD3Chart");
+  if(!el || !Array.isArray(rows) || rows.length < 2) return false;
+
+  const data = rows
+    .map(r => ({date:new Date(String(r.date)+"T00:00:00"), iso:String(r.date), poids:Number(r.poids)}))
+    .filter(d => Number.isFinite(d.date.getTime()) && Number.isFinite(d.poids));
+  if(data.length < 2) return false;
+
+  const width = Math.max(300, Math.round(el.clientWidth || 430));
+  const height = Math.max(320, Math.round(el.clientHeight || 380));
+  const margin = {top:34,right:18,bottom:50,left:45};
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+  const t0 = data[0].date.getTime();
+  const t1 = data[data.length-1].date.getTime();
+  const minRaw = Math.min(...data.map(d => d.poids));
+  const maxRaw = Math.max(...data.map(d => d.poids));
+  const pad = Math.max(.4, (maxRaw-minRaw)*.2);
+  const yMin = minRaw-pad;
+  const yMax = maxRaw+pad;
+  const x = d => margin.left + ((d.date.getTime()-t0) / Math.max(1,t1-t0))*innerW;
+  const y = d => margin.top + (1-((d.poids-yMin)/Math.max(.1,yMax-yMin)))*innerH;
+  const points = data.map(d => `${x(d).toFixed(1)},${y(d).toFixed(1)}`).join(" ");
+  const area = `${margin.left},${margin.top+innerH} ${points} ${margin.left+innerW},${margin.top+innerH}`;
+  const target = getWeightTarget();
+  const targetY = Number.isFinite(Number(target)) && Number(target)>=yMin && Number(target)<=yMax
+    ? margin.top + (1-((Number(target)-yMin)/(yMax-yMin)))*innerH
+    : null;
+
+  const yTicks = Array.from({length:5},(_,i)=> yMin+(yMax-yMin)*(i/4));
+  const xIndices = [...new Set([0, Math.floor((data.length-1)/2), data.length-1])];
+  const grid = yTicks.map(v => {
+    const py = margin.top + (1-((v-yMin)/(yMax-yMin)))*innerH;
+    return `<line x1="${margin.left}" y1="${py}" x2="${margin.left+innerW}" y2="${py}" class="native-grid"/><text x="${margin.left-8}" y="${py+4}" text-anchor="end" class="native-axis-label">${v.toFixed(1)}</text>`;
+  }).join("");
+  const xLabels = xIndices.map(i => `<text x="${x(data[i])}" y="${height-18}" text-anchor="middle" class="native-axis-label">${formatDateShort(data[i].iso)}</text>`).join("");
+  const dots = data.map((d,i)=>`<circle cx="${x(d)}" cy="${y(d)}" r="${i===data.length-1?4.5:3}" class="native-dot"><title>${formatDateShort(d.iso)} · ${d.poids.toLocaleString("fr-FR")} kg</title></circle>`).join("");
+
+  el.innerHTML = `<div class="native-chart-notice">${escapeHtml(notice)}</div>
+    <svg viewBox="0 0 ${width} ${height}" class="native-weight-svg" role="img" aria-label="Évolution du poids">
+      ${grid}
+      ${targetY===null?"":`<line x1="${margin.left}" y1="${targetY}" x2="${margin.left+innerW}" y2="${targetY}" class="native-target"/><text x="${margin.left+innerW-4}" y="${targetY-6}" text-anchor="end" class="native-target-label">Objectif ${Number(target).toLocaleString("fr-FR")} kg</text>`}
+      <polygon points="${area}" class="native-area"/>
+      <polyline points="${points}" class="native-line"/>
+      ${dots}
+      ${xLabels}
+      <text x="${margin.left}" y="18" class="native-chart-title">${data[data.length-1].poids.toLocaleString("fr-FR")} kg</text>
+    </svg>`;
+  return true;
+}
+
+function calcVisibleWeightDomain(data){
+  const values = [];
+
+  data.forEach(d => {
+    if(Number.isFinite(d.poids)) values.push(d.poids);
+    if(Number.isFinite(d.ma7)) values.push(d.ma7);
+    if(Number.isFinite(d.ma30)) values.push(d.ma30);
+  });
+
+  if(!values.length) return [0, 1];
+
+  const minRaw = Math.min(...values);
+  const maxRaw = Math.max(...values);
+  const pad = Math.max(0.35, (maxRaw - minRaw) * 0.22);
+
+  let min = Math.floor((minRaw - pad) * 10) / 10;
+  let max = Math.ceil((maxRaw + pad) * 10) / 10;
+
+  if(min === max){
+    min -= 0.5;
+    max += 0.5;
+  }
+
+  return [min, max];
+}
+
+function filterVisibleData(data, domain){
+  if(!domain) return data;
+  const [x0, x1] = domain;
+  return data.filter(d => d.date >= x0 && d.date <= x1);
+}
+
+function weightTickCount(min, max){
+  const span = Math.abs(max - min);
+  if(span <= 2) return 5;
+  if(span <= 5) return 6;
+  return 7;
+}
+
+
+function clampWeightDomain(domain, fullDomain){
+  const dayMs = 24 * 60 * 60 * 1000;
+  const fullStart = +fullDomain[0];
+  const fullEnd = +fullDomain[1];
+  const fullSpan = Math.max(1, fullEnd - fullStart);
+  const minSpan = Math.min(2 * dayMs, fullSpan);
+
+  let start = +domain[0];
+  let end = +domain[1];
+
+  if(!Number.isFinite(start) || !Number.isFinite(end) || start >= end){
+    return [new Date(fullStart), new Date(fullEnd)];
+  }
+
+  let span = end - start;
+
+  if(span < minSpan){
+    const mid = (start + end) / 2;
+    start = mid - minSpan / 2;
+    end = mid + minSpan / 2;
+    span = minSpan;
+  }
+
+  if(span >= fullSpan){
+    return [new Date(fullStart), new Date(fullEnd)];
+  }
+
+  if(start < fullStart){
+    end += fullStart - start;
+    start = fullStart;
+  }
+
+  if(end > fullEnd){
+    start -= end - fullEnd;
+    end = fullEnd;
+  }
+
+  if(start < fullStart) start = fullStart;
+  if(end > fullEnd) end = fullEnd;
+
+  return [new Date(start), new Date(end)];
+}
+
+function requestWeightD3Render(renderFn){
+  if(weightD3RenderFrame) cancelAnimationFrame(weightD3RenderFrame);
+
+  weightD3RenderFrame = requestAnimationFrame(() => {
+    weightD3RenderFrame = null;
+    renderFn();
+  });
+}
+
+async function drawWeightChart(){
+  const el = document.getElementById("weightD3Chart");
+  if(!el) return;
+
+  clearWeightD3Chart();
+
+  const rows = chartRowsForWeight();
+
+  if(rows.length < 2){
+    renderWeightChartFallback("Ajoute au moins 2 pesées pour afficher la courbe.");
+    return;
+  }
+
+  el.innerHTML = `<div class="chart-loading">Chargement du graphique D3…</div>`;
+
+  let d3;
+  try{
+    d3 = await loadD3();
+  }catch(e){
+    if(!renderNativeWeightChart(rows)){
+      renderWeightChartFallback(e.message || "Erreur de chargement.");
+    }
+    return;
+  }
+
+  el.innerHTML = "";
+
+  const weights = rows.map(r => Number(r.poids));
+  const ma7Arr = movingAverage(weights, 7);
+  const ma30Arr = movingAverage(weights, 30);
+  const parseDate = d3.timeParse("%Y-%m-%d");
+
+  const data = rows.map((r, i) => ({
+    date: parseDate(r.date),
+    iso: r.date,
+    poids: Number(r.poids),
+    ma7: ma7Arr[i] === null ? null : Number(ma7Arr[i]),
+    ma30: ma30Arr[i] === null ? null : Number(ma30Arr[i])
+  })).filter(d => d.date && Number.isFinite(d.poids));
+
+  if(data.length < 2){
+    renderWeightChartFallback("Données de poids insuffisantes.");
+    return;
+  }
+
+  const target = getWeightTarget();
+
+  function render(){
+    const width = Math.max(320, el.clientWidth || 430);
+    const height = Math.max(360, el.clientHeight || 400);
+
+    el.innerHTML = "";
+
+    const margin = {
+      top: 30,
+      right: 14,
+      bottom: 56,
+      left: 42
+    };
+
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const fullXDomain = d3.extent(data, d => d.date);
+
+    let xDomain = weightD3VisibleDomain || fullXDomain;
+    xDomain = clampWeightDomain(xDomain, fullXDomain);
+
+    weightD3VisibleDomain = xDomain;
+
+    let visibleData = filterVisibleData(data, xDomain);
+    if(visibleData.length < 2){
+      visibleData = data.slice(-2);
+    }
+
+    const [yMin, yMax] = calcVisibleWeightDomain(visibleData);
+
+    const x = d3.scaleTime()
+      .domain(xDomain)
+      .range([0, innerW]);
+
+    const y = d3.scaleLinear()
+      .domain([yMin, yMax])
+      .nice()
+      .range([innerH, 0]);
+
+    const svg = d3.select(el)
+      .append("svg")
+      .attr("class", "d3-weight-svg d3-animated")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("preserveAspectRatio", "none");
+
+    const defs = svg.append("defs");
+
+    const areaGradient = defs.append("linearGradient")
+      .attr("id", "weightAreaGradient")
+      .attr("x1", "0%")
+      .attr("y1", "0%")
+      .attr("x2", "0%")
+      .attr("y2", "100%");
+
+    areaGradient.append("stop")
+      .attr("offset", "0%")
+      .attr("stop-color", "var(--chart-area-top)");
+
+    areaGradient.append("stop")
+      .attr("offset", "100%")
+      .attr("stop-color", "var(--chart-area-bottom)");
+
+    const lineGlow = defs.append("filter")
+      .attr("id", "lineGlow")
+      .attr("x", "-20%")
+      .attr("y", "-20%")
+      .attr("width", "140%")
+      .attr("height", "140%");
+
+    lineGlow.append("feGaussianBlur")
+      .attr("stdDeviation", "2.2")
+      .attr("result", "coloredBlur");
+
+    const feMerge = lineGlow.append("feMerge");
+    feMerge.append("feMergeNode").attr("in", "coloredBlur");
+    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Fond subtil high-tech
+    g.append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", innerW)
+      .attr("height", innerH)
+      .attr("rx", 2)
+      .attr("fill", "var(--chart-plot-bg)");
+
+    // Grille horizontale
+    const yTicks = y.ticks(weightTickCount(yMin, yMax));
+
+    g.append("g")
+      .attr("class", "d3-grid-y")
+      .selectAll("line")
+      .data(yTicks)
+      .join("line")
+      .attr("x1", 0)
+      .attr("x2", innerW)
+      .attr("y1", d => Math.round(y(d)) + 0.5)
+      .attr("y2", d => Math.round(y(d)) + 0.5);
+
+    // Grille verticale
+    const visibleDays = Math.max(1, (x.domain()[1] - x.domain()[0]) / (24 * 60 * 60 * 1000));
+    const xTickCount = visibleDays <= 3 ? Math.min(4, Math.ceil(visibleDays) + 1) : Math.min(7, Math.max(3, Math.floor(innerW / 70)));
+    const xTicks = x.ticks(xTickCount);
+
+    g.append("g")
+      .attr("class", "d3-grid-x")
+      .selectAll("line")
+      .data(xTicks)
+      .join("line")
+      .attr("y1", 0)
+      .attr("y2", innerH)
+      .attr("x1", d => Math.round(x(d)) + 0.5)
+      .attr("x2", d => Math.round(x(d)) + 0.5);
+
+    // Axe Y à gauche
+    const yAxis = d3.axisLeft(y)
+      .tickValues(yTicks)
+      .tickSize(0)
+      .tickPadding(8)
+      .tickFormat(d => Number(d).toLocaleString("fr-FR", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      }));
+
+    g.append("g")
+      .attr("class", "d3-axis d3-axis-y")
+      .call(yAxis);
+
+    // Label KG en haut
+    g.append("text")
+      .attr("class", "d3-y-unit")
+      .attr("x", -2)
+      .attr("y", -14)
+      .attr("text-anchor", "start")
+      .text("kg");
+
+    // Axe X
+    const xAxis = d3.axisBottom(x)
+      .ticks(xTickCount)
+      .tickSize(0)
+      .tickPadding(10)
+      .tickFormat(visibleDays <= 3 ? d3.timeFormat("%d/%m %Hh") : d3.timeFormat("%d/%m"));
+
+    g.append("g")
+      .attr("class", "d3-axis d3-axis-x")
+      .attr("transform", `translate(0,${innerH})`)
+      .call(xAxis);
+
+    g.append("line")
+      .attr("class", "d3-x-baseline")
+      .attr("x1", 0)
+      .attr("x2", innerW)
+      .attr("y1", Math.round(innerH) + 0.5)
+      .attr("y2", Math.round(innerH) + 0.5);
+
+    g.append("line")
+      .attr("class", "d3-y-baseline")
+      .attr("x1", 0.5)
+      .attr("x2", 0.5)
+      .attr("y1", 0)
+      .attr("y2", innerH);
+
+    // Ligne objectif
+    if(target && target >= y.domain()[0] && target <= y.domain()[1]){
+      g.append("line")
+        .attr("class", "d3-target-line")
+        .attr("x1", 0)
+        .attr("x2", innerW)
+        .attr("y1", y(target))
+        .attr("y2", y(target));
+
+      g.append("text")
+        .attr("class", "d3-target-label")
+        .attr("x", 6)
+        .attr("y", y(target) - 8)
+        .text("Objectif " + formatKg(target));
+    }
+
+    const area = d3.area()
+      .defined(d => Number.isFinite(d.poids))
+      .x(d => x(d.date))
+      .y0(innerH)
+      .y1(d => y(d.poids))
+      .curve(d3.curveMonotoneX);
+
+    const lineWeight = d3.line()
+      .defined(d => Number.isFinite(d.poids))
+      .x(d => x(d.date))
+      .y(d => y(d.poids))
+      .curve(d3.curveMonotoneX);
+
+    const lineMa7 = d3.line()
+      .defined(d => d.ma7 !== null && Number.isFinite(d.ma7))
+      .x(d => x(d.date))
+      .y(d => y(d.ma7))
+      .curve(d3.curveMonotoneX);
+
+    const lineMa30 = d3.line()
+      .defined(d => d.ma30 !== null && Number.isFinite(d.ma30))
+      .x(d => x(d.date))
+      .y(d => y(d.ma30))
+      .curve(d3.curveMonotoneX);
+
+    const clipped = g.append("g")
+      .attr("clip-path", "url(#d3ChartClip)");
+
+    defs.append("clipPath")
+      .attr("id", "d3ChartClip")
+      .append("rect")
+      .attr("width", innerW)
+      .attr("height", innerH);
+
+    clipped.append("path")
+      .datum(data)
+      .attr("class", "d3-area")
+      .attr("d", area);
+
+    clipped.append("path")
+      .datum(data)
+      .attr("class", "d3-line d3-line-ma30")
+      .attr("pathLength", 1)
+      .attr("d", lineMa30);
+
+    clipped.append("path")
+      .datum(data)
+      .attr("class", "d3-line d3-line-ma7")
+      .attr("pathLength", 1)
+      .attr("d", lineMa7);
+
+    clipped.append("path")
+      .datum(data)
+      .attr("class", "d3-line d3-line-weight")
+      .attr("pathLength", 1)
+      .attr("filter", "url(#lineGlow)")
+      .attr("d", lineWeight);
+
+    // Points visibles mais discrets
+    const visiblePoints = visibleData.length > 42
+      ? visibleData.filter((_, i) => i % Math.ceil(visibleData.length / 26) === 0)
+      : visibleData;
+
+    clipped.append("g")
+      .attr("class", "d3-points")
+      .selectAll("circle")
+      .data(visiblePoints)
+      .join("circle")
+      .attr("cx", d => x(d.date))
+      .attr("cy", d => y(d.poids))
+      .attr("r", 2.25);
+
+    const last = data[data.length - 1];
+
+    if(last.date >= weightD3VisibleDomain[0] && last.date <= weightD3VisibleDomain[1]){
+      const lx = Math.min(innerW - 54, Math.max(6, x(last.date) + 6));
+      const ly = Math.max(8, Math.min(innerH - 24, y(last.poids) - 13));
+
+      g.append("circle")
+        .attr("class", "d3-last-pulse")
+        .attr("cx", x(last.date))
+        .attr("cy", y(last.poids))
+        .attr("r", 6);
+
+      g.append("circle")
+        .attr("class", "d3-last-dot")
+        .attr("cx", x(last.date))
+        .attr("cy", y(last.poids))
+        .attr("r", 4);
+
+      g.append("rect")
+        .attr("class", "d3-last-tag")
+        .attr("x", lx)
+        .attr("y", ly)
+        .attr("width", 54)
+        .attr("height", 24)
+        .attr("rx", 7);
+
+      g.append("text")
+        .attr("class", "d3-last-tag-text")
+        .attr("x", lx + 27)
+        .attr("y", ly + 16)
+        .attr("text-anchor", "middle")
+        .text(formatKg(last.poids).replace(" kg", ""));
+    }
+
+    // Tooltip custom
+    const tooltip = d3.select(el)
+      .append("div")
+      .attr("class", "d3-tooltip")
+      .style("opacity", 0);
+
+    const bisect = d3.bisector(d => d.date).left;
+
+    const focus = g.append("g")
+      .attr("class", "d3-focus")
+      .style("display", "none");
+
+    focus.append("line")
+      .attr("class", "d3-focus-line")
+      .attr("y1", 0)
+      .attr("y2", innerH);
+
+    focus.append("circle")
+      .attr("class", "d3-focus-dot")
+      .attr("r", 4);
+
+    const overlay = g.append("rect")
+      .attr("class", "d3-overlay")
+      .attr("width", innerW)
+      .attr("height", innerH);
+
+    function updateTooltip(event){
+      const [mx] = d3.pointer(event, overlay.node());
+      const date = x.invert(mx);
+      let i = bisect(data, date, 1);
+      if(i >= data.length) i = data.length - 1;
+      const d0 = data[i - 1];
+      const d1 = data[i];
+      const d = !d0 ? d1 : !d1 ? d0 : (date - d0.date > d1.date - date ? d1 : d0);
+
+      if(!d) return;
+
+      const fx = x(d.date);
+      const fy = y(d.poids);
+
+      focus.style("display", null);
+      focus.select(".d3-focus-line")
+        .attr("x1", fx)
+        .attr("x2", fx);
+
+      focus.select(".d3-focus-dot")
+        .attr("cx", fx)
+        .attr("cy", fy);
+
+      const html = `
+        <strong>${fmt(d.iso)}</strong>
+        <span><i class="dot weight"></i>Poids <b>${formatKg(d.poids)}</b></span>
+        ${d.ma7 !== null ? `<span><i class="dot ma7"></i>MM 7j <b>${formatKg(d.ma7)}</b></span>` : ""}
+        ${d.ma30 !== null ? `<span><i class="dot ma30"></i>MM 30j <b>${formatKg(d.ma30)}</b></span>` : ""}
+      `;
+
+      tooltip.html(html)
+        .style("opacity", 1);
+
+      const tooltipNode = tooltip.node();
+      const tw = tooltipNode.offsetWidth || 150;
+      const th = tooltipNode.offsetHeight || 100;
+      const left = Math.min(width - tw - 8, Math.max(8, margin.left + fx + 12));
+      const top = Math.min(height - th - 8, Math.max(8, margin.top + fy - th - 10));
+
+      tooltip
+        .style("left", left + "px")
+        .style("top", top + "px");
+    }
+
+    overlay
+      .on("mousemove touchmove", event => {
+        if(event.touches && event.touches.length) event.preventDefault();
+        updateTooltip(event);
+      })
+      .on("mouseenter touchstart", () => {
+        focus.style("display", null);
+      })
+      .on("mouseleave touchend", () => {
+        focus.style("display", "none");
+        tooltip.style("opacity", 0);
+      });
+
+    // Zoom / pan manuel stable : on modifie directement le domaine des dates
+    const wheelTarget = svg;
+
+    wheelTarget.on("wheel", event => {
+      event.preventDefault();
+
+      const current = weightD3VisibleDomain || fullXDomain;
+      const currentStart = +current[0];
+      const currentEnd = +current[1];
+      const span = currentEnd - currentStart;
+
+      const pointer = d3.pointer(event, svg.node());
+      const mouseX = Math.max(0, Math.min(innerW, pointer[0] - margin.left));
+      const ratio = innerW ? mouseX / innerW : 0.5;
+
+      const anchor = currentStart + span * ratio;
+      const dy = event.deltaY * (event.deltaMode === 1 ? 16 : 1);
+
+      // Facteur doux : molette haut = zoom avant, molette bas = zoom arrière
+      let factor = Math.exp(dy * 0.00115);
+      factor = Math.max(0.86, Math.min(1.16, factor));
+
+      const newSpan = span * factor;
+      const nextStart = anchor - newSpan * ratio;
+      const nextEnd = anchor + newSpan * (1 - ratio);
+
+      weightD3VisibleDomain = clampWeightDomain(
+        [new Date(nextStart), new Date(nextEnd)],
+        fullXDomain
+      );
+
+      weightD3ZoomTransform = null;
+      requestWeightD3Render(render);
+    });
+
+    let panStartX = null;
+    let panStartDomain = null;
+
+    overlay.on("pointerdown", event => {
+      event.preventDefault();
+
+      panStartX = event.clientX;
+      panStartDomain = weightD3VisibleDomain || fullXDomain;
+
+      if(overlay.node().setPointerCapture){
+        overlay.node().setPointerCapture(event.pointerId);
+      }
+
+      const onMove = moveEvent => {
+        if(!panStartDomain) return;
+
+        moveEvent.preventDefault();
+
+        const dx = moveEvent.clientX - panStartX;
+        const start = +panStartDomain[0];
+        const end = +panStartDomain[1];
+        const span = end - start;
+
+        // Drag à droite = on remonte vers les dates plus anciennes, sans saut brutal
+        const shift = -dx / Math.max(1, innerW) * span;
+
+        weightD3VisibleDomain = clampWeightDomain(
+          [new Date(start + shift), new Date(end + shift)],
+          fullXDomain
+        );
+
+        weightD3ZoomTransform = null;
+        requestWeightD3Render(render);
+      };
+
+      const onUp = upEvent => {
+        panStartX = null;
+        panStartDomain = null;
+
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+
+        try{
+          if(overlay.node().releasePointerCapture){
+            overlay.node().releasePointerCapture(upEvent.pointerId);
+          }
+        }catch(e){}
+      };
+
+      window.addEventListener("pointermove", onMove, {passive:false});
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
+
+    // Mini navigator
+    const navH = 18;
+    const navY = height - 24;
+    const navX = margin.left;
+    const navW = innerW;
+
+    const navScaleX = d3.scaleTime()
+      .domain(fullXDomain)
+      .range([navX, navX + navW]);
+
+    const navScaleY = d3.scaleLinear()
+      .domain(calcVisibleWeightDomain(data))
+      .range([navY + navH, navY]);
+
+    const navArea = d3.area()
+      .x(d => navScaleX(d.date))
+      .y0(navY + navH)
+      .y1(d => navScaleY(d.poids))
+      .curve(d3.curveMonotoneX);
+
+    svg.append("rect")
+      .attr("class", "d3-nav-bg")
+      .attr("x", navX)
+      .attr("y", navY)
+      .attr("width", navW)
+      .attr("height", navH)
+      .attr("rx", 5);
+
+    svg.append("path")
+      .datum(data)
+      .attr("class", "d3-nav-area")
+      .attr("d", navArea);
+
+    const [vd0, vd1] = weightD3VisibleDomain;
+    const selX = navScaleX(vd0);
+    const selW = Math.max(8, navScaleX(vd1) - selX);
+
+    svg.append("rect")
+      .attr("class", "d3-nav-window")
+      .attr("x", selX)
+      .attr("y", navY - 1)
+      .attr("width", selW)
+      .attr("height", navH + 2)
+      .attr("rx", 5);
+  }
+
+  render();
+
+  weightD3ResizeObserver = new ResizeObserver(() => {
+    render();
+  });
+
+  weightD3ResizeObserver.observe(el);
+}
+
+
+function trainingEditModalHtml(){
+  if(!editingTrainingId) return "";
+  const item = state.trainings.find(x => x.id === editingTrainingId);
+  if(!item){ editingTrainingId = null; return ""; }
+
+  const muscleOptions = [...new Set([...(state.muscles || []), item.seance].filter(Boolean))]
+    .map(name => `<option value="${escapeHtml(name)}" ${name === item.seance ? "selected" : ""}>${escapeHtml(name)}</option>`)
+    .join("");
+  const exerciseOptions = [...new Set([...(state.exercises || []), item.exercice].filter(Boolean))]
+    .sort((a,b) => String(a).localeCompare(String(b), "fr"))
+    .map(name => `<option value="${escapeHtml(name)}" ${name === item.exercice ? "selected" : ""}>${escapeHtml(name)}</option>`)
+    .join("");
+
+  return `<div class="training-edit-overlay" role="presentation" onclick="if(event.target===this) closeTrainingEditor()">
+    <section class="training-edit-modal" role="dialog" aria-modal="true" aria-labelledby="trainingEditTitle">
+      <div class="training-edit-head">
+        <div><span>Modification</span><h2 id="trainingEditTitle">Modifier la série</h2></div>
+        <button type="button" class="training-edit-close" aria-label="Fermer" onclick="closeTrainingEditor()">×</button>
+      </div>
+      <div class="training-edit-grid top">
+        <div><label>Date</label><input id="editTrDate" type="date" max="${today()}" value="${escapeHtml(item.date)}"></div>
+        <div><label>Séance</label><select id="editTrSeance">${muscleOptions}</select></div>
+        <div><label>Type</label><select id="editTrType">${[1,2,3,4].map(v => `<option ${String(v)===String(item.type)?"selected":""}>${v}</option>`).join("")}</select></div>
+      </div>
+      <div><label>Exercice</label><select id="editTrExercice">${exerciseOptions}</select></div>
+      <div class="training-edit-grid values">
+        <div><label>Série</label><input id="editTrSerie" inputmode="numeric" value="${escapeHtml(item.serie)}"></div>
+        <div><label>Poids</label><input id="editTrPoids" inputmode="decimal" value="${escapeHtml(item.poids)}"></div>
+        <div><label>Répétitions</label><input id="editTrReps" inputmode="numeric" value="${escapeHtml(item.repetitions)}"></div>
+      </div>
+      <div class="training-edit-actions">
+        <button type="button" class="secondary" onclick="closeTrainingEditor()">Annuler</button>
+        <button type="button" onclick="saveTrainingEditor()">Enregistrer</button>
+      </div>
+    </section>
+  </div>`;
+}
+
+function openTrainingEditor(id){
+  if(!state.trainings.some(x => x.id === id)) return;
+  editingTrainingId = id;
+  render();
+  requestAnimationFrame(() => document.getElementById("editTrPoids")?.focus());
+}
+
+function closeTrainingEditor(){
+  editingTrainingId = null;
+  render();
+}
+
+function saveTrainingEditor(){
+  const item = state.trainings.find(x => x.id === editingTrainingId);
+  if(!item) return closeTrainingEditor();
+
+  const date = val("editTrDate");
+  const seance = val("editTrSeance");
+  const type = val("editTrType");
+  const exercice = val("editTrExercice");
+  const serie = Number(val("editTrSerie"));
+  const poids = Number(val("editTrPoids").replace(",", "."));
+  const repetitions = Number(val("editTrReps"));
+
+  if(!date || !seance || !exercice || !Number.isFinite(serie) || serie < 1 || !Number.isFinite(poids) || poids <= 0 || !Number.isFinite(repetitions) || repetitions < 1){
+    alert("Vérifie la date, la séance, l'exercice, le numéro de série, le poids et les répétitions.");
+    return;
+  }
+  if(!checkNotFutureDate(date)) return;
+
+  item.date = date;
+  item.seance = seance;
+  item.type = type;
+  item.exercice = exercice;
+  item.serie = Math.trunc(serie);
+  item.poids = poids;
+  item.repetitions = Math.trunc(repetitions);
+  item.volume = item.poids * item.repetitions;
+  item.semaine = weekNumber(item.date);
+  item.mois = monthName(item.date);
+
+  save();
+  editingTrainingId = null;
+  render();
+}
+
+function deleteItem(type, id){
+
+  if(!confirm("Supprimer cette donnée ?")) return;
+
+  state[type] = state[type].filter(x => x.id !== id);
+  if(type === "meals") selectedMealIds.delete(id);
+
+  save();
+
+  if(current === "history"){
+    renderHistory();
+  } else {
+    render();
+  }
+}
+
+function editItem(type, id){
+
+  const item = state[type].find(x => x.id === id);
+  if(!item) return;
+
+  if(type === "weights"){
+    const p = prompt("Modifier poids :", item.poids);
+    if(p === null) return;
+    item.poids = Number(p.replace(",", "."));
+  }
+
+  if(type === "trainings"){
+    openTrainingEditor(id);
+    return;
+  }
+
+  if(type === "meals"){
+    const q = prompt("Quantité :", item.qte);
+    if(q === null) return;
+
+    const qte = Number(q.replace(",", "."));
+    if(!qte || qte <= 0){
+      alert("Quantité invalide.");
+      return;
+    }
+
+    item.qte = qte;
+    recalcMeal(item);
+  }
+
+  save();
+
+  if(current === "history"){
+    renderHistory();
+  } else {
+    render();
+  }
+}
+
 function recalcMeal(item){
   const food = state.foods.find(f => f.name === item.aliment);
 
@@ -2929,8 +4342,8 @@ function clearExerciseSelection(){
   if(weight) weight.value = "";
   if(reps) reps.value = "";
   if(suggestions){ suggestions.innerHTML = ""; suggestions.style.display = "none"; }
-  updateAutocompleteClearButton("trExercice", "clearExerciseBtn");
   showLastExercise();
+  updateAutocompleteClearButton("trExercice", "clearExerciseBtn");
   input?.focus();
 }
 
@@ -2976,7 +4389,6 @@ function selectFood(name){
   document.getElementById("foodSuggestions").innerHTML = "";
   document.getElementById("foodSuggestions").style.display = "none";
   updateAutocompleteClearButton("mealFood", "clearFoodBtn");
-  updateMealQuantityUi(name);
 }
 
 function filterExercises(){
@@ -3016,15 +4428,15 @@ function selectExercise(name){
   input.value = name;
   box.innerHTML = "";
   box.style.display = "none";
-  updateAutocompleteClearButton("trExercice", "clearExerciseBtn");
 
   showLastExercise();
+  updateAutocompleteClearButton("trExercice", "clearExerciseBtn");
 }
 
 function registerFitnessServiceWorker(){
   if(!("serviceWorker" in navigator) || location.protocol === "file:") return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=135").catch(error => {
+    navigator.serviceWorker.register("./service-worker.js?v=136").catch(error => {
       console.warn("Service worker non enregistré", error);
     });
   }, {once:true});

@@ -1,0 +1,8 @@
+ÉTAPE 122 — AFFICHAGE COMPACT DES SÉRIES
+
+- Suppression des libellés « Exercice 1 », « Exercice 2 ».
+- Titre affiché sous la forme « 1. Nom de l'exercice ».
+- Séries affichées sur une même ligne avec le séparateur « | ».
+- Maximum de 3 séries par ligne, puis retour automatique à la ligne.
+- Rendu appliqué à la séance du jour et au détail de la dernière séance.
+- Cache PWA incrémenté en version 122.

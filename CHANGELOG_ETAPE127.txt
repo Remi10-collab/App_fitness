@@ -1,0 +1,9 @@
+Étape 127 — retouche visuelle du mode Programme
+
+- Réduction de la présence du bleu foncé dans l’interface Programme.
+- Boutons Séance libre / Programme rééquilibrés : seul l’onglet actif est fortement mis en avant.
+- Cartes d’exercices éclaircies, en-têtes moins chargés.
+- Carte programme et compteurs adoucis.
+- Champ Date élargi et mieux aligné.
+- Affichage de la date mobile optimisé dans la grille Programme.
+- Cache PWA / GitHub Pages mis à jour en version 127.

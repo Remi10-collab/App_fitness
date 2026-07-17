@@ -1,0 +1,13 @@
+SUIVI FITNESS — ÉTAPE 120
+
+- CSS actif allégé : thèmes abandonnés et doublons stricts retirés.
+- Références vers les images absentes supprimées et remplacées par des fonds CSS légers.
+- Responsive mobile renforcé : aucun débordement horizontal détecté à 390 px.
+- Espace de sécurité augmenté au-dessus de la navigation fixe.
+- Graphique de poids utilisable hors ligne grâce à un rendu SVG natif de secours.
+- Service worker ajouté pour mettre en cache l'application et ses ressources.
+- Import JSON complet : profil, objectif, activité, thème, muscles, exercices, aliments et historiques.
+- Valeurs personnalisées échappées dans les suggestions et les actions de suppression.
+- Icônes PWA ajoutées.
+
+Les données restent stockées sous la même clé localStorage : la mise à jour conserve les données existantes.

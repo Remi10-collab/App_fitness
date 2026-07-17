@@ -1,0 +1,12 @@
+Étape 131 — programmes JSON séparés
+
+- Suppression du Programme Ayoub du code de base.
+- L’application démarre sans programme intégré.
+- Ajout d’une bibliothèque de programmes stockée dans state.programs.
+- Ajout d’un import JSON propre aux programmes depuis Train → Programme.
+- Ajout de l’export individuel du programme sélectionné.
+- Ajout de la suppression d’un programme sans toucher à l’historique d’entraînement.
+- L’import et l’export des données générales ignorent désormais les programmes.
+- Un fichier programme-ayoub.json séparé est fourni dans le ZIP.
+- La liste d’exercices modifiée dans le ZIP source a été conservée sans changement.
+- Cache PWA / GitHub Pages mis à jour en version 131.

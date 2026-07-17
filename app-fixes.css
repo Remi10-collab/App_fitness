@@ -1179,52 +1179,16 @@ body[data-theme="galaxy"] .app .autocomplete-clear-btn{
   filter:brightness(.97);
 }
 
-/* Étape 135 — ergonomie profils, champs et vues */
-.autocomplete-clear-btn[hidden]{
-  display:none !important;
-}
-.app .autocomplete-clear-btn,
-body[data-theme="light"] .app .autocomplete-clear-btn,
-body[data-theme="galaxy"] .app .autocomplete-clear-btn{
-  background:transparent !important;
-  background-image:none !important;
-  border:0 !important;
-  box-shadow:none !important;
-  color:#697b91 !important;
-}
-body[data-theme="galaxy"] .app .autocomplete-clear-btn{
-  color:#c6d4e5 !important;
-}
-.app .autocomplete-clear-btn:hover{
-  background:rgba(100,116,139,.10) !important;
-  filter:none !important;
-}
-.profile-personal-card{
-  overflow:hidden;
-}
-.profile-personal-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  cursor:pointer;
-  user-select:none;
-}
-.profile-personal-head h2{
-  margin:0 0 5px;
-}
-.profile-personal-head strong{
-  display:block;
-  font-size:.95rem;
-}
-.profile-collapsed-summary{
-  margin-top:14px;
-}
-.profile-personal-card.is-open .profile-form{
-  margin-top:16px;
-  padding-top:14px;
-  border-top:1px solid rgba(148,163,184,.18);
-}
-body[data-theme="light"] .profile-personal-card.is-open .profile-form{
-  border-top-color:#dbe4ee;
-}
+
+/* Étape 136 — ergonomie profils, champs et vues */
+.autocomplete-clear-btn[hidden]{display:none !important}
+.app .autocomplete-clear-btn,body[data-theme="light"] .app .autocomplete-clear-btn,body[data-theme="galaxy"] .app .autocomplete-clear-btn{background:transparent !important;background-image:none !important;border:0 !important;box-shadow:none !important;color:#697b91 !important}
+body[data-theme="galaxy"] .app .autocomplete-clear-btn{color:#c6d4e5 !important}
+.app .autocomplete-clear-btn:hover{background:rgba(100,116,139,.10) !important;filter:none !important}
+.profile-personal-card{overflow:hidden}
+.profile-personal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;user-select:none}
+.profile-personal-head h2{margin:0 0 5px}
+.profile-personal-head strong{display:block;font-size:.95rem}
+.profile-collapsed-summary{margin-top:14px}
+.profile-personal-card.is-open .profile-form{margin-top:16px;padding-top:14px;border-top:1px solid rgba(148,163,184,.18)}
+body[data-theme="light"] .profile-personal-card.is-open .profile-form{border-top-color:#dbe4ee}

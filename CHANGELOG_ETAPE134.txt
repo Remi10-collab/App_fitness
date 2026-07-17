@@ -1,0 +1,10 @@
+Étape 134 — gestion des œufs à l’unité
+
+- L’aliment Œufs est désormais calculé à l’unité et non pour 100 g.
+- 1 œuf correspond aux valeurs nutritionnelles enregistrées : 65 kcal, 5,54 g de protéines, 0,34 g de glucides et 4,4 g de lipides.
+- La saisie affiche automatiquement « Nombre d’œufs » après sélection de l’aliment Œufs.
+- Les repas favoris calculent aussi les œufs à l’unité.
+- Les historiques affichent « 1 œuf », « 2 œufs », etc., au lieu de grammes.
+- La modification d’une ancienne saisie d’œufs recalcule correctement les macros à l’unité.
+- Les autres aliments restent calculés sur une base de 100 g.
+- Cache PWA / GitHub Pages mis à jour en version 134.

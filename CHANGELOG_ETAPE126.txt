@@ -1,0 +1,15 @@
+Étape 126 — socle Programme
+
+- Ajout d’un sélecteur de mode dans Train : Séance libre / Programme.
+- Le mode Séance libre conserve le comportement actuel.
+- Ajout d’un premier programme intégré : Programme Test.
+- Ajout de deux séances de démonstration : Séance A et Séance B.
+- Chaque exercice du programme affiche :
+  - objectif séries / répétitions,
+  - dernière performance,
+  - champs poids et répétitions,
+  - bouton Valider la série,
+  - progression de l’exercice.
+- Les séries validées depuis le mode Programme sont enregistrées dans l’historique normal des entraînements.
+- Ajout d’indicateurs de progression de séance : exercices commencés et séries validées.
+- Cache PWA / GitHub Pages mis à jour en version 126.

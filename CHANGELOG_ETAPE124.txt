@@ -1,0 +1,7 @@
+ÉTAPE 124
+
+- Data > Entraînements : titre compact « 1. Nom de l’exercice » sur une seule ligne.
+- Une seule fiche exercice peut rester ouverte à la fois.
+- Cliquer sur la fiche ouverte la referme toujours.
+- Correction de la mise en page des séries : « S1 : 36 kg x 15 reps » reste sur une seule ligne.
+- Cache PWA mis à jour en version 124.

@@ -1,0 +1,10 @@
+Étape 132 — bibliothèque GitHub de programmes
+
+- Ajout d’une bibliothèque en ligne dans Train → Programme.
+- Le catalogue est chargé depuis ./programmes/catalogue.json sur GitHub Pages.
+- Installation d’un programme en un clic depuis le catalogue.
+- Détection des programmes déjà installés et des nouvelles versions disponibles.
+- Conservation de l’import manuel JSON séparé.
+- Ajout du dossier programmes/ avec catalogue.json et programme-ayoub.json.
+- Gestion réseau d’abord / cache de secours dans le service worker pour les programmes.
+- Cache PWA / GitHub Pages mis à jour en version 132.

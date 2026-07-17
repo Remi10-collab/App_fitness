@@ -1,0 +1,9 @@
+ÉTAPE 121 — DÉTAIL DES SÉANCES REGROUPÉ PAR EXERCICE
+
+- Les séries ne répètent plus le nom de l'exercice ligne par ligne.
+- La section « Séance du jour » regroupe désormais les séries sous chaque exercice.
+- Le détail de la dernière séance sur l'accueil utilise le même affichage.
+- Les exercices conservent l'ordre réel de saisie de la séance.
+- Les séries sont rangées par numéro croissant.
+- Affichage adapté aux thèmes Galaxie et Clair.
+- Cache PWA incrémenté en version 121 afin de forcer la mise à jour sur GitHub Pages.

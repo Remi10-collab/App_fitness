@@ -1,0 +1,2 @@
+Étape 136 — réparation de la version 135 et réapplication sûre des 8 corrections.
+Cache PWA version 136.
